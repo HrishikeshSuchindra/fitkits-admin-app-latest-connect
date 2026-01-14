@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
-import { adminApi, AnalyticsOverview } from '@/lib/adminApi';
+import { adminApi } from '@/lib/adminApi';
 import { AdminLayout } from '@/components/layout/AdminLayout';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { 
   Users, 
   Calendar, 
@@ -9,12 +9,12 @@ import {
   MapPin, 
   TrendingUp, 
   TrendingDown,
-  ArrowUpRight,
-  ArrowDownRight
+  ChevronDown,
+  CalendarDays
 } from 'lucide-react';
 import { 
-  LineChart, 
-  Line, 
+  AreaChart, 
+  Area, 
   XAxis, 
   YAxis, 
   CartesianGrid, 
@@ -24,31 +24,34 @@ import {
   Bar
 } from 'recharts';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Button } from '@/components/ui/button';
 
-function StatCard({ 
+function KPICard({ 
   title, 
   value, 
   change, 
   icon: Icon, 
+  iconBg,
   loading 
 }: { 
   title: string; 
   value: string; 
   change?: number; 
   icon: React.ElementType;
+  iconBg: string;
   loading?: boolean;
 }) {
   const isPositive = change && change > 0;
   
   if (loading) {
     return (
-      <Card>
-        <CardContent className="p-6">
+      <Card className="card-elevated">
+        <CardContent className="p-4">
           <div className="flex items-start justify-between">
             <div className="space-y-2">
-              <Skeleton className="h-4 w-20" />
-              <Skeleton className="h-8 w-24" />
-              <Skeleton className="h-4 w-16" />
+              <Skeleton className="h-3 w-16" />
+              <Skeleton className="h-7 w-20" />
+              <Skeleton className="h-3 w-14" />
             </div>
             <Skeleton className="h-10 w-10 rounded-xl" />
           </div>
@@ -58,21 +61,20 @@ function StatCard({
   }
 
   return (
-    <Card className="shadow-soft">
-      <CardContent className="p-6">
+    <Card className="card-elevated">
+      <CardContent className="p-4">
         <div className="flex items-start justify-between">
           <div>
-            <p className="text-sm font-medium text-muted-foreground">{title}</p>
-            <p className="text-2xl font-bold text-foreground mt-1">{value}</p>
+            <p className="metric-label">{title}</p>
+            <p className="metric-value mt-1">{value}</p>
             {change !== undefined && (
-              <div className={`flex items-center gap-1 mt-2 text-sm font-medium ${isPositive ? 'text-success' : 'text-destructive'}`}>
-                {isPositive ? <ArrowUpRight className="h-4 w-4" /> : <ArrowDownRight className="h-4 w-4" />}
+              <div className={isPositive ? 'growth-positive' : 'growth-negative'}>
+                {isPositive ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
                 <span>{Math.abs(change).toFixed(1)}%</span>
-                <span className="text-muted-foreground font-normal">vs last period</span>
               </div>
             )}
           </div>
-          <div className="icon-container bg-primary/10">
+          <div className={`icon-container ${iconBg}`}>
             <Icon className="h-5 w-5 text-primary" />
           </div>
         </div>
@@ -108,134 +110,154 @@ export default function AdminDashboard() {
   };
 
   return (
-    <AdminLayout>
+    <AdminLayout title="Business Insights">
       <div className="space-y-6">
-        {/* Header */}
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
-          <p className="text-muted-foreground">Welcome back! Here's what's happening with FitKits.</p>
-        </div>
+        {/* Date Range Selector */}
+        <Card className="card-elevated">
+          <CardContent className="p-3">
+            <Button variant="ghost" className="w-full justify-between text-foreground">
+              <div className="flex items-center gap-2">
+                <CalendarDays className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm font-medium">Last 30 Days</span>
+              </div>
+              <ChevronDown className="h-4 w-4 text-muted-foreground" />
+            </Button>
+          </CardContent>
+        </Card>
 
-        {/* Stats Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <StatCard
-            title="Total Users"
-            value={stats?.totalUsers?.toLocaleString() ?? '0'}
-            change={stats?.userGrowth}
-            icon={Users}
-            loading={overviewLoading}
-          />
-          <StatCard
-            title="Total Bookings"
-            value={stats?.totalBookings?.toLocaleString() ?? '0'}
-            change={stats?.bookingGrowth}
-            icon={Calendar}
-            loading={overviewLoading}
-          />
-          <StatCard
+        {/* KPI Cards Grid */}
+        <div className="grid grid-cols-2 gap-3">
+          <KPICard
             title="Total Revenue"
             value={stats ? formatCurrency(stats.totalRevenue) : '$0'}
             change={stats?.revenueGrowth}
             icon={DollarSign}
+            iconBg="bg-success-light"
             loading={overviewLoading}
           />
-          <StatCard
+          <KPICard
+            title="Total Bookings"
+            value={stats?.totalBookings?.toLocaleString() ?? '0'}
+            change={stats?.bookingGrowth}
+            icon={Calendar}
+            iconBg="bg-primary-light"
+            loading={overviewLoading}
+          />
+          <KPICard
+            title="Total Users"
+            value={stats?.totalUsers?.toLocaleString() ?? '0'}
+            change={stats?.userGrowth}
+            icon={Users}
+            iconBg="bg-warning-light"
+            loading={overviewLoading}
+          />
+          <KPICard
             title="Active Venues"
             value={stats?.activeVenues?.toLocaleString() ?? '0'}
             icon={MapPin}
+            iconBg="bg-accent"
             loading={overviewLoading}
           />
         </div>
 
-        {/* Charts */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Revenue Chart */}
-          <Card className="shadow-soft">
-            <CardHeader>
-              <CardTitle className="text-lg">Revenue Trend</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {revenueLoading ? (
-                <Skeleton className="h-[300px] w-full" />
-              ) : (
-                <ResponsiveContainer width="100%" height={300}>
-                  <LineChart data={revenueData?.revenue || []}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                    <XAxis 
-                      dataKey="date" 
-                      stroke="hsl(var(--muted-foreground))"
-                      fontSize={12}
-                      tickFormatter={(value) => new Date(value).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                    />
-                    <YAxis 
-                      stroke="hsl(var(--muted-foreground))"
-                      fontSize={12}
-                      tickFormatter={(value) => `$${value}`}
-                    />
-                    <Tooltip 
-                      contentStyle={{ 
-                        backgroundColor: 'hsl(var(--card))',
-                        border: '1px solid hsl(var(--border))',
-                        borderRadius: '8px'
-                      }}
-                      formatter={(value: number) => [`$${value}`, 'Revenue']}
-                      labelFormatter={(label) => new Date(label).toLocaleDateString()}
-                    />
-                    <Line 
-                      type="monotone" 
-                      dataKey="amount" 
-                      stroke="hsl(var(--primary))" 
-                      strokeWidth={2}
-                      dot={false}
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              )}
-            </CardContent>
-          </Card>
+        {/* Revenue Chart */}
+        <Card className="card-elevated">
+          <CardContent className="p-4">
+            <h3 className="font-semibold text-foreground mb-4">Revenue Trend</h3>
+            {revenueLoading ? (
+              <Skeleton className="h-[200px] w-full" />
+            ) : (
+              <ResponsiveContainer width="100%" height={200}>
+                <AreaChart data={revenueData?.revenue || []}>
+                  <defs>
+                    <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3}/>
+                      <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
+                  <XAxis 
+                    dataKey="date" 
+                    stroke="hsl(var(--muted-foreground))"
+                    fontSize={10}
+                    tickLine={false}
+                    axisLine={false}
+                    tickFormatter={(value) => new Date(value).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                  />
+                  <YAxis 
+                    stroke="hsl(var(--muted-foreground))"
+                    fontSize={10}
+                    tickLine={false}
+                    axisLine={false}
+                    tickFormatter={(value) => `$${value}`}
+                  />
+                  <Tooltip 
+                    contentStyle={{ 
+                      backgroundColor: 'hsl(var(--card))',
+                      border: '1px solid hsl(var(--border))',
+                      borderRadius: '12px',
+                      fontSize: '12px'
+                    }}
+                    formatter={(value: number) => [`$${value}`, 'Revenue']}
+                    labelFormatter={(label) => new Date(label).toLocaleDateString()}
+                  />
+                  <Area 
+                    type="monotone" 
+                    dataKey="amount" 
+                    stroke="hsl(var(--primary))" 
+                    strokeWidth={2}
+                    fill="url(#colorRevenue)"
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            )}
+          </CardContent>
+        </Card>
 
-          {/* Bookings Chart */}
-          <Card className="shadow-soft">
-            <CardHeader>
-              <CardTitle className="text-lg">Bookings Trend</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {bookingsLoading ? (
-                <Skeleton className="h-[300px] w-full" />
-              ) : (
-                <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={bookingsData?.bookings || []}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                    <XAxis 
-                      dataKey="date" 
-                      stroke="hsl(var(--muted-foreground))"
-                      fontSize={12}
-                      tickFormatter={(value) => new Date(value).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                    />
-                    <YAxis 
-                      stroke="hsl(var(--muted-foreground))"
-                      fontSize={12}
-                    />
-                    <Tooltip 
-                      contentStyle={{ 
-                        backgroundColor: 'hsl(var(--card))',
-                        border: '1px solid hsl(var(--border))',
-                        borderRadius: '8px'
-                      }}
-                      formatter={(value: number) => [value, 'Bookings']}
-                      labelFormatter={(label) => new Date(label).toLocaleDateString()}
-                    />
-                    <Bar 
-                      dataKey="count" 
-                      fill="hsl(var(--primary))" 
-                      radius={[4, 4, 0, 0]}
-                    />
-                  </BarChart>
-                </ResponsiveContainer>
-              )}
-            </CardContent>
-          </Card>
-        </div>
+        {/* Bookings Chart */}
+        <Card className="card-elevated">
+          <CardContent className="p-4">
+            <h3 className="font-semibold text-foreground mb-4">Bookings Overview</h3>
+            {bookingsLoading ? (
+              <Skeleton className="h-[200px] w-full" />
+            ) : (
+              <ResponsiveContainer width="100%" height={200}>
+                <BarChart data={bookingsData?.bookings || []}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
+                  <XAxis 
+                    dataKey="date" 
+                    stroke="hsl(var(--muted-foreground))"
+                    fontSize={10}
+                    tickLine={false}
+                    axisLine={false}
+                    tickFormatter={(value) => new Date(value).toLocaleDateString('en-US', { weekday: 'short' })}
+                  />
+                  <YAxis 
+                    stroke="hsl(var(--muted-foreground))"
+                    fontSize={10}
+                    tickLine={false}
+                    axisLine={false}
+                  />
+                  <Tooltip 
+                    contentStyle={{ 
+                      backgroundColor: 'hsl(var(--card))',
+                      border: '1px solid hsl(var(--border))',
+                      borderRadius: '12px',
+                      fontSize: '12px'
+                    }}
+                    formatter={(value: number) => [value, 'Bookings']}
+                    labelFormatter={(label) => new Date(label).toLocaleDateString()}
+                  />
+                  <Bar 
+                    dataKey="count" 
+                    fill="hsl(var(--primary))" 
+                    radius={[6, 6, 0, 0]}
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </CardContent>
+        </Card>
       </div>
     </AdminLayout>
   );

@@ -2,10 +2,11 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { adminApi, Venue } from '@/lib/adminApi';
 import { AdminLayout } from '@/components/layout/AdminLayout';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
 import {
   Select,
   SelectContent,
@@ -24,24 +25,15 @@ import {
 import { 
   Search, 
   Plus,
-  MoreVertical, 
   Pencil, 
   Trash2,
   MapPin,
   DollarSign,
   Loader2
 } from 'lucide-react';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
 import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 
 const defaultVenue: Partial<Venue> = {
@@ -83,7 +75,7 @@ export default function VenuesPage() {
     mutationFn: (venue: Partial<Venue>) => adminApi.createVenue(venue),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['venues'] });
-      toast.success('Venue created successfully');
+      toast.success('Venue created');
       setEditDialog({ open: false, venue: null, isNew: false });
     },
     onError: (error: Error) => {
@@ -96,7 +88,7 @@ export default function VenuesPage() {
       adminApi.updateVenue(venueId, updates),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['venues'] });
-      toast.success('Venue updated successfully');
+      toast.success('Venue updated');
       setEditDialog({ open: false, venue: null, isNew: false });
     },
     onError: (error: Error) => {
@@ -108,7 +100,7 @@ export default function VenuesPage() {
     mutationFn: (venueId: string) => adminApi.deleteVenue(venueId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['venues'] });
-      toast.success('Venue deleted successfully');
+      toast.success('Venue deleted');
       setDeleteDialog(null);
     },
     onError: (error: Error) => {
@@ -131,75 +123,62 @@ export default function VenuesPage() {
 
   const isSaveLoading = createMutation.isPending || updateMutation.isPending;
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-    }).format(amount);
-  };
-
   return (
-    <AdminLayout>
-      <div className="space-y-6">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">Venues</h1>
-            <p className="text-muted-foreground">Manage venue listings</p>
-          </div>
-          <Button onClick={() => setEditDialog({ open: true, venue: { ...defaultVenue }, isNew: true })}>
-            <Plus className="mr-2 h-4 w-4" />
-            Add Venue
+    <AdminLayout title="My Venues">
+      <div className="space-y-4">
+        {/* Header with Add Button */}
+        <div className="flex items-center justify-between">
+          <p className="text-muted-foreground text-sm">Manage your venues</p>
+          <Button 
+            size="sm" 
+            className="rounded-full px-4"
+            onClick={() => setEditDialog({ open: true, venue: { ...defaultVenue }, isNew: true })}
+          >
+            <Plus className="h-4 w-4 mr-1" />
+            Add New
           </Button>
         </div>
 
-        {/* Filters */}
-        <Card className="shadow-soft">
-          <CardContent className="p-4">
-            <div className="flex flex-col sm:flex-row gap-4">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search venues..."
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
-              <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-                <SelectTrigger className="w-full sm:w-[180px]">
-                  <SelectValue placeholder="Category" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Categories</SelectItem>
-                  <SelectItem value="courts">Courts</SelectItem>
-                  <SelectItem value="studio">Studio</SelectItem>
-                  <SelectItem value="recovery">Recovery</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </CardContent>
-        </Card>
+        {/* Search & Filters */}
+        <div className="space-y-3">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search venues..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-10 h-11 rounded-xl"
+            />
+          </div>
+          <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+            <SelectTrigger className="h-10 rounded-xl">
+              <SelectValue placeholder="Category" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Categories</SelectItem>
+              <SelectItem value="courts">Courts</SelectItem>
+              <SelectItem value="studio">Studio</SelectItem>
+              <SelectItem value="recovery">Recovery</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
 
-        {/* Venues Grid */}
-        {isLoading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <Card key={i} className="shadow-soft">
-                <Skeleton className="h-48 w-full rounded-t-lg" />
-                <CardContent className="p-4 space-y-3">
+        {/* Venues List */}
+        <div className="space-y-4">
+          {isLoading ? (
+            Array.from({ length: 3 }).map((_, i) => (
+              <Card key={i} className="card-elevated overflow-hidden">
+                <Skeleton className="h-40 w-full" />
+                <CardContent className="p-4 space-y-2">
                   <Skeleton className="h-5 w-3/4" />
                   <Skeleton className="h-4 w-1/2" />
-                  <Skeleton className="h-4 w-full" />
                 </CardContent>
               </Card>
-            ))}
-          </div>
-        ) : data?.venues && data.venues.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {data.venues.map((venue) => (
-              <Card key={venue.id} className="shadow-soft overflow-hidden">
-                <div className="h-48 bg-muted relative">
+            ))
+          ) : data?.venues && data.venues.length > 0 ? (
+            data.venues.map((venue) => (
+              <Card key={venue.id} className="card-elevated overflow-hidden">
+                <div className="relative h-40 bg-muted">
                   {venue.image_url ? (
                     <img 
                       src={venue.image_url} 
@@ -208,82 +187,94 @@ export default function VenuesPage() {
                     />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center">
-                      <MapPin className="h-12 w-12 text-muted-foreground/50" />
+                      <MapPin className="h-12 w-12 text-muted-foreground/30" />
                     </div>
                   )}
-                  <div className="absolute top-3 right-3">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="secondary" size="icon" className="h-8 w-8">
-                          <MoreVertical className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem
-                          onClick={() => setEditDialog({ open: true, venue: { ...venue }, isNew: false })}
-                        >
-                          <Pencil className="mr-2 h-4 w-4" />
-                          Edit
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                          onClick={() => setDeleteDialog(venue)}
-                          className="text-destructive"
-                        >
-                          <Trash2 className="mr-2 h-4 w-4" />
-                          Delete
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
                   <div className="absolute top-3 left-3">
-                    <Badge variant={venue.is_active ? 'default' : 'secondary'}>
+                    <Badge 
+                      variant={venue.is_active ? 'default' : 'secondary'}
+                      className="rounded-full"
+                    >
                       {venue.is_active ? 'Active' : 'Inactive'}
                     </Badge>
                   </div>
+                  <div className="absolute top-3 right-3">
+                    <Switch
+                      checked={venue.is_active}
+                      onCheckedChange={(checked) => {
+                        updateMutation.mutate({
+                          venueId: venue.id,
+                          updates: { is_active: checked }
+                        });
+                      }}
+                    />
+                  </div>
                 </div>
                 <CardContent className="p-4">
-                  <h3 className="font-semibold text-foreground">{venue.name}</h3>
-                  <p className="text-sm text-muted-foreground capitalize">{venue.category} • {venue.sport}</p>
-                  <div className="flex items-center gap-1 mt-2 text-muted-foreground text-sm">
-                    <MapPin className="h-4 w-4" />
-                    <span className="truncate">{venue.location}</span>
-                  </div>
-                  <div className="flex items-center gap-1 mt-1 text-primary font-semibold">
-                    <DollarSign className="h-4 w-4" />
-                    <span>{venue.price_per_hour}/hr</span>
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-semibold text-foreground truncate">{venue.name}</h3>
+                      <p className="text-sm text-muted-foreground capitalize">
+                        {venue.category} • {venue.sport}
+                      </p>
+                      <div className="flex items-center gap-1 mt-2 text-success font-bold">
+                        <DollarSign className="h-4 w-4" />
+                        <span>{venue.price_per_hour}/hr</span>
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="rounded-lg"
+                        onClick={() => setEditDialog({ open: true, venue: { ...venue }, isNew: false })}
+                      >
+                        <Pencil className="h-3 w-3 mr-1" />
+                        Edit
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-destructive"
+                        onClick={() => setDeleteDialog(venue)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
-            ))}
-          </div>
-        ) : (
-          <Card className="shadow-soft">
-            <CardContent className="py-12 text-center text-muted-foreground">
-              No venues found
-            </CardContent>
-          </Card>
-        )}
+            ))
+          ) : (
+            <Card className="card-elevated">
+              <CardContent className="py-12 text-center text-muted-foreground">
+                No venues found
+              </CardContent>
+            </Card>
+          )}
+        </div>
 
         {/* Pagination */}
         {data && data.total > 20 && (
-          <div className="flex justify-center gap-2">
+          <div className="flex justify-center gap-2 pt-2">
             <Button
               variant="outline"
               size="sm"
               disabled={page === 1}
               onClick={() => setPage(page - 1)}
+              className="rounded-xl"
             >
               Previous
             </Button>
             <span className="flex items-center px-4 text-sm text-muted-foreground">
-              Page {page} of {Math.ceil(data.total / 20)}
+              {page} / {Math.ceil(data.total / 20)}
             </span>
             <Button
               variant="outline"
               size="sm"
               disabled={page >= Math.ceil(data.total / 20)}
               onClick={() => setPage(page + 1)}
+              className="rounded-xl"
             >
               Next
             </Button>
@@ -296,7 +287,7 @@ export default function VenuesPage() {
         open={editDialog.open} 
         onOpenChange={(open) => !open && setEditDialog({ open: false, venue: null, isNew: false })}
       >
-        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogContent className="mx-4 rounded-2xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editDialog.isNew ? 'Add New Venue' : 'Edit Venue'}</DialogTitle>
             <DialogDescription>
@@ -315,10 +306,11 @@ export default function VenuesPage() {
                     venue: { ...prev.venue!, name: e.target.value }
                   }))}
                   placeholder="Enter venue name"
+                  className="rounded-xl"
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-2">
                   <Label>Category</Label>
                   <Select 
@@ -328,7 +320,7 @@ export default function VenuesPage() {
                       venue: { ...prev.venue!, category: value }
                     }))}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger className="rounded-xl">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -348,6 +340,7 @@ export default function VenuesPage() {
                       venue: { ...prev.venue!, sport: e.target.value }
                     }))}
                     placeholder="e.g., Badminton"
+                    className="rounded-xl"
                   />
                 </div>
               </div>
@@ -361,6 +354,7 @@ export default function VenuesPage() {
                     venue: { ...prev.venue!, location: e.target.value }
                   }))}
                   placeholder="City or area"
+                  className="rounded-xl"
                 />
               </div>
 
@@ -373,6 +367,7 @@ export default function VenuesPage() {
                     venue: { ...prev.venue!, address: e.target.value }
                   }))}
                   placeholder="Full address"
+                  className="rounded-xl"
                 />
               </div>
 
@@ -386,6 +381,7 @@ export default function VenuesPage() {
                     venue: { ...prev.venue!, price_per_hour: parseFloat(e.target.value) || 0 }
                   }))}
                   placeholder="0.00"
+                  className="rounded-xl"
                 />
               </div>
 
@@ -398,10 +394,11 @@ export default function VenuesPage() {
                     venue: { ...prev.venue!, image_url: e.target.value }
                   }))}
                   placeholder="https://..."
+                  className="rounded-xl"
                 />
               </div>
 
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between py-2">
                 <Label>Active</Label>
                 <Switch
                   checked={editDialog.venue.is_active}
@@ -414,16 +411,17 @@ export default function VenuesPage() {
             </div>
           )}
 
-          <DialogFooter>
+          <DialogFooter className="flex-row gap-2">
             <Button 
               variant="outline" 
               onClick={() => setEditDialog({ open: false, venue: null, isNew: false })}
+              className="flex-1 rounded-xl"
             >
               Cancel
             </Button>
-            <Button onClick={handleSave} disabled={isSaveLoading}>
+            <Button onClick={handleSave} disabled={isSaveLoading} className="flex-1 rounded-xl">
               {isSaveLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {editDialog.isNew ? 'Create' : 'Save Changes'}
+              {editDialog.isNew ? 'Create' : 'Save'}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -431,19 +429,22 @@ export default function VenuesPage() {
 
       {/* Delete Dialog */}
       <Dialog open={deleteDialog !== null} onOpenChange={(open) => !open && setDeleteDialog(null)}>
-        <DialogContent>
+        <DialogContent className="mx-4 rounded-2xl">
           <DialogHeader>
             <DialogTitle>Delete Venue</DialogTitle>
             <DialogDescription>
-              Are you sure you want to delete "{deleteDialog?.name}"? This action cannot be undone.
+              Delete "{deleteDialog?.name}"? This cannot be undone.
             </DialogDescription>
           </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteDialog(null)}>Cancel</Button>
+          <DialogFooter className="flex-row gap-2">
+            <Button variant="outline" onClick={() => setDeleteDialog(null)} className="flex-1 rounded-xl">
+              Cancel
+            </Button>
             <Button 
               variant="destructive" 
               onClick={() => deleteDialog && deleteMutation.mutate(deleteDialog.id)}
               disabled={deleteMutation.isPending}
+              className="flex-1 rounded-xl"
             >
               {deleteMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Delete
