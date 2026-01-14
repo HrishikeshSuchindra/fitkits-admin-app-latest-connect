@@ -132,7 +132,18 @@ export default function BookingsPage() {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: 'USD',
-    }).format(amount);
+    }).format(amount || 0);
+  };
+
+  const formatDate = (dateString: string | undefined | null) => {
+    if (!dateString) return 'N/A';
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return 'Invalid date';
+      return format(date, 'MMM d, yyyy');
+    } catch {
+      return 'Invalid date';
+    }
   };
 
   return (
@@ -210,9 +221,9 @@ export default function BookingsPage() {
                         <div className="flex items-center gap-2 text-foreground">
                           <Calendar className="h-4 w-4 text-muted-foreground" />
                           <div>
-                            <p>{format(new Date(booking.booking_date), 'MMM d, yyyy')}</p>
+                            <p>{formatDate(booking.booking_date)}</p>
                             <p className="text-sm text-muted-foreground">
-                              {booking.start_time} - {booking.end_time}
+                              {booking.start_time || 'N/A'} - {booking.end_time || 'N/A'}
                             </p>
                           </div>
                         </div>
