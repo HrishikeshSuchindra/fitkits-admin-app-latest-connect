@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { adminApi, Venue } from '@/lib/adminApi';
+import { directApi, Venue } from '@/lib/directApi';
 import { AdminLayout } from '@/components/layout/AdminLayout';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -63,7 +63,7 @@ export default function VenuesPage() {
 
   const { data, isLoading } = useQuery({
     queryKey: ['venues', { search, category: categoryFilter, page }],
-    queryFn: () => adminApi.getVenues({
+    queryFn: () => directApi.getVenues({
       search: search || undefined,
       category: categoryFilter !== 'all' ? categoryFilter : undefined,
       page,
@@ -72,7 +72,7 @@ export default function VenuesPage() {
   });
 
   const createMutation = useMutation({
-    mutationFn: (venue: Partial<Venue>) => adminApi.createVenue(venue),
+    mutationFn: (venue: Partial<Venue>) => directApi.createVenue(venue),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['venues'] });
       toast.success('Venue created');
@@ -85,7 +85,7 @@ export default function VenuesPage() {
 
   const updateMutation = useMutation({
     mutationFn: ({ venueId, updates }: { venueId: string; updates: Partial<Venue> }) =>
-      adminApi.updateVenue(venueId, updates),
+      directApi.updateVenue(venueId, updates),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['venues'] });
       toast.success('Venue updated');
@@ -97,7 +97,7 @@ export default function VenuesPage() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (venueId: string) => adminApi.deleteVenue(venueId),
+    mutationFn: (venueId: string) => directApi.deleteVenue(venueId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['venues'] });
       toast.success('Venue deleted');

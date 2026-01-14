@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { adminApi, Booking } from '@/lib/adminApi';
+import { directApi, Booking } from '@/lib/directApi';
 import { AdminLayout } from '@/components/layout/AdminLayout';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -47,7 +47,7 @@ export default function BookingsPage() {
 
   const { data, isLoading } = useQuery({
     queryKey: ['bookings', { status: statusFilter, page }],
-    queryFn: () => adminApi.getBookings({
+    queryFn: () => directApi.getBookings({
       status: statusFilter !== 'all' ? statusFilter : undefined,
       page,
       limit: 20,
@@ -56,7 +56,7 @@ export default function BookingsPage() {
 
   const cancelMutation = useMutation({
     mutationFn: ({ bookingId, reason }: { bookingId: string; reason: string }) =>
-      adminApi.cancelBooking(bookingId, reason),
+      directApi.cancelBooking(bookingId, reason),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['bookings'] });
       toast.success('Booking cancelled');
@@ -69,7 +69,7 @@ export default function BookingsPage() {
 
   const refundMutation = useMutation({
     mutationFn: ({ bookingId, reason }: { bookingId: string; reason: string }) =>
-      adminApi.refundBooking(bookingId, reason),
+      directApi.refundBooking(bookingId, reason),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['bookings'] });
       toast.success('Refund processed');
