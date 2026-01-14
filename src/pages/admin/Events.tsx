@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { adminApi, Event } from '@/lib/adminApi';
+import { directApi, Event } from '@/lib/directApi';
 import { AdminLayout } from '@/components/layout/AdminLayout';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -48,7 +48,7 @@ export default function EventsPage() {
 
   const { data, isLoading } = useQuery({
     queryKey: ['events', { status: statusFilter, page }],
-    queryFn: () => adminApi.getEvents({
+    queryFn: () => directApi.getEvents({
       status: statusFilter !== 'all' ? statusFilter : undefined,
       page,
       limit: 20,
@@ -57,7 +57,7 @@ export default function EventsPage() {
 
   const cancelMutation = useMutation({
     mutationFn: ({ eventId, reason }: { eventId: string; reason: string }) =>
-      adminApi.cancelEvent(eventId, reason),
+      directApi.cancelEvent(eventId, reason),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['events'] });
       toast.success('Event cancelled');
@@ -69,7 +69,7 @@ export default function EventsPage() {
   });
 
   const toggleFeaturedMutation = useMutation({
-    mutationFn: (eventId: string) => adminApi.toggleEventFeatured(eventId),
+    mutationFn: (eventId: string) => directApi.toggleEventFeatured(eventId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['events'] });
       toast.success('Featured status updated');
@@ -80,7 +80,7 @@ export default function EventsPage() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (eventId: string) => adminApi.deleteEvent(eventId),
+    mutationFn: (eventId: string) => directApi.deleteEvent(eventId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['events'] });
       toast.success('Event deleted');

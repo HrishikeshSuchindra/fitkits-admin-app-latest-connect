@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { adminApi, AuditLog } from '@/lib/adminApi';
+import { directApi, AuditLog } from '@/lib/directApi';
 import { AdminLayout } from '@/components/layout/AdminLayout';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -46,7 +46,7 @@ export default function AuditLogPage() {
 
   const { data, isLoading } = useQuery({
     queryKey: ['audit-logs', { page }],
-    queryFn: () => adminApi.getAuditLogs({ page, limit: 20 }),
+    queryFn: () => directApi.getAuditLogs({ page, limit: 20 }),
   });
 
   const formatAction = (action: string) => {

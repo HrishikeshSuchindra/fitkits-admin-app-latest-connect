@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { adminApi, User } from '@/lib/adminApi';
+import { directApi, User } from '@/lib/directApi';
 import { AdminLayout } from '@/components/layout/AdminLayout';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -58,7 +58,7 @@ export default function UsersPage() {
 
   const { data, isLoading } = useQuery({
     queryKey: ['users', { search, status: statusFilter, page }],
-    queryFn: () => adminApi.getUsers({
+    queryFn: () => directApi.getUsers({
       search: search || undefined,
       status: statusFilter !== 'all' ? statusFilter as 'active' | 'inactive' : undefined,
       page,
@@ -68,7 +68,7 @@ export default function UsersPage() {
 
   const deactivateMutation = useMutation({
     mutationFn: ({ userId, reason }: { userId: string; reason: string }) =>
-      adminApi.deactivateUser(userId, reason),
+      directApi.deactivateUser(userId, reason),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'] });
       toast.success('User deactivated successfully');
@@ -80,7 +80,7 @@ export default function UsersPage() {
   });
 
   const reactivateMutation = useMutation({
-    mutationFn: (userId: string) => adminApi.reactivateUser(userId),
+    mutationFn: (userId: string) => directApi.reactivateUser(userId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'] });
       toast.success('User reactivated successfully');
@@ -93,7 +93,7 @@ export default function UsersPage() {
 
   const setRoleMutation = useMutation({
     mutationFn: ({ userId, role }: { userId: string; role: 'admin' | 'moderator' | 'user' }) =>
-      adminApi.setUserRole(userId, role),
+      directApi.setUserRole(userId, role),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'] });
       toast.success('User role updated successfully');

@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { adminApi } from '@/lib/adminApi';
+import { directApi } from '@/lib/directApi';
 import { AdminLayout } from '@/components/layout/AdminLayout';
 import { Card, CardContent } from '@/components/ui/card';
 import { 
@@ -86,17 +86,17 @@ function KPICard({
 export default function AdminDashboard() {
   const { data: overview, isLoading: overviewLoading } = useQuery({
     queryKey: ['analytics', 'overview'],
-    queryFn: () => adminApi.getAnalytics('overview', '30d'),
+    queryFn: () => directApi.getAnalytics('overview', '30d'),
   });
 
   const { data: revenueData, isLoading: revenueLoading } = useQuery({
     queryKey: ['analytics', 'revenue'],
-    queryFn: () => adminApi.getAnalytics('revenue', '30d'),
+    queryFn: () => directApi.getAnalytics('revenue', '30d'),
   });
 
   const { data: bookingsData, isLoading: bookingsLoading } = useQuery({
     queryKey: ['analytics', 'bookings'],
-    queryFn: () => adminApi.getAnalytics('bookings', '30d'),
+    queryFn: () => directApi.getAnalytics('bookings', '30d'),
   });
 
   const stats = overview?.overview;
