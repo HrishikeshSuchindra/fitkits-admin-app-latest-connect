@@ -2,18 +2,10 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { adminApi, User } from '@/lib/adminApi';
 import { AdminLayout } from '@/components/layout/AdminLayout';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { 
-  Table, 
-  TableBody, 
-  TableCell, 
-  TableHead, 
-  TableHeader, 
-  TableRow 
-} from '@/components/ui/table';
 import {
   Select,
   SelectContent,
@@ -35,7 +27,9 @@ import {
   UserX, 
   UserCheck, 
   Shield,
-  Loader2
+  Loader2,
+  Phone,
+  Mail
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -52,7 +46,6 @@ import { Textarea } from '@/components/ui/textarea';
 export default function UsersPage() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [roleFilter, setRoleFilter] = useState<string>('all');
   const [page, setPage] = useState(1);
   const [actionDialog, setActionDialog] = useState<{
     type: 'deactivate' | 'reactivate' | 'role' | null;
@@ -64,11 +57,10 @@ export default function UsersPage() {
   const queryClient = useQueryClient();
 
   const { data, isLoading } = useQuery({
-    queryKey: ['users', { search, status: statusFilter, role: roleFilter, page }],
+    queryKey: ['users', { search, status: statusFilter, page }],
     queryFn: () => adminApi.getUsers({
       search: search || undefined,
       status: statusFilter !== 'all' ? statusFilter as 'active' | 'inactive' : undefined,
-      role: roleFilter !== 'all' ? roleFilter as 'admin' | 'moderator' | 'user' : undefined,
       page,
       limit: 20,
     }),
@@ -142,180 +134,152 @@ export default function UsersPage() {
   const isActionLoading = deactivateMutation.isPending || reactivateMutation.isPending || setRoleMutation.isPending;
 
   return (
-    <AdminLayout>
-      <div className="space-y-6">
-        {/* Header */}
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Users</h1>
-          <p className="text-muted-foreground">Manage user accounts and roles</p>
+    <AdminLayout title="Users">
+      <div className="space-y-4">
+        {/* Search & Filters */}
+        <div className="space-y-3">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search users..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-10 h-11 rounded-xl"
+            />
+          </div>
+          <div className="flex gap-2">
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="h-10 rounded-xl flex-1">
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Status</SelectItem>
+                <SelectItem value="active">Active</SelectItem>
+                <SelectItem value="inactive">Inactive</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
 
-        {/* Filters */}
-        <Card className="shadow-soft">
-          <CardContent className="p-4">
-            <div className="flex flex-col sm:flex-row gap-4">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search users..."
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-full sm:w-[150px]">
-                  <SelectValue placeholder="Status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Status</SelectItem>
-                  <SelectItem value="active">Active</SelectItem>
-                  <SelectItem value="inactive">Inactive</SelectItem>
-                </SelectContent>
-              </Select>
-              <Select value={roleFilter} onValueChange={setRoleFilter}>
-                <SelectTrigger className="w-full sm:w-[150px]">
-                  <SelectValue placeholder="Role" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Roles</SelectItem>
-                  <SelectItem value="admin">Admin</SelectItem>
-                  <SelectItem value="moderator">Moderator</SelectItem>
-                  <SelectItem value="user">User</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Users Table */}
-        <Card className="shadow-soft">
-          <CardContent className="p-0">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>User</TableHead>
-                  <TableHead>Role</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Joined</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {isLoading ? (
-                  Array.from({ length: 5 }).map((_, i) => (
-                    <TableRow key={i}>
-                      <TableCell>
-                        <div className="flex items-center gap-3">
-                          <Skeleton className="h-10 w-10 rounded-full" />
-                          <div className="space-y-1">
-                            <Skeleton className="h-4 w-32" />
-                            <Skeleton className="h-3 w-40" />
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell><Skeleton className="h-5 w-16" /></TableCell>
-                      <TableCell><Skeleton className="h-5 w-16" /></TableCell>
-                      <TableCell><Skeleton className="h-4 w-24" /></TableCell>
-                      <TableCell><Skeleton className="h-8 w-8 ml-auto" /></TableCell>
-                    </TableRow>
-                  ))
-                ) : data?.users && data.users.length > 0 ? (
-                  data.users.map((user) => (
-                    <TableRow key={user.id}>
-                      <TableCell>
-                        <div className="flex items-center gap-3">
-                          <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
-                            <span className="text-primary font-medium">
-                              {user.full_name?.[0]?.toUpperCase() || user.email[0].toUpperCase()}
-                            </span>
-                          </div>
-                          <div>
-                            <p className="font-medium text-foreground">{user.full_name || 'No name'}</p>
-                            <p className="text-sm text-muted-foreground">{user.email}</p>
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={user.role === 'admin' ? 'default' : 'secondary'}>
-                          {user.role || 'user'}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={user.is_active ? 'outline' : 'destructive'}>
+        {/* Users List */}
+        <div className="space-y-3">
+          {isLoading ? (
+            Array.from({ length: 5 }).map((_, i) => (
+              <Card key={i} className="card-elevated">
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-3">
+                    <Skeleton className="h-12 w-12 rounded-full" />
+                    <div className="flex-1 space-y-2">
+                      <Skeleton className="h-4 w-32" />
+                      <Skeleton className="h-3 w-40" />
+                    </div>
+                    <Skeleton className="h-8 w-8" />
+                  </div>
+                </CardContent>
+              </Card>
+            ))
+          ) : data?.users && data.users.length > 0 ? (
+            data.users.map((user) => (
+              <Card key={user.id} className="card-elevated">
+                <CardContent className="p-4">
+                  <div className="flex items-start gap-3">
+                    <div className="h-12 w-12 rounded-full bg-primary-light flex items-center justify-center flex-shrink-0">
+                      <span className="text-primary font-semibold text-lg">
+                        {user.full_name?.[0]?.toUpperCase() || user.email[0].toUpperCase()}
+                      </span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <p className="font-semibold text-foreground truncate">
+                          {user.full_name || 'No name'}
+                        </p>
+                        <Badge 
+                          variant={user.is_active ? 'default' : 'secondary'}
+                          className="text-[10px] px-2 py-0"
+                        >
                           {user.is_active ? 'Active' : 'Inactive'}
                         </Badge>
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {new Date(user.created_at).toLocaleDateString()}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon">
-                              <MoreVertical className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem
-                              onClick={() => setActionDialog({ type: 'role', user })}
-                            >
-                              <Shield className="mr-2 h-4 w-4" />
-                              Change Role
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            {user.is_active ? (
-                              <DropdownMenuItem
-                                onClick={() => setActionDialog({ type: 'deactivate', user })}
-                                className="text-destructive"
-                              >
-                                <UserX className="mr-2 h-4 w-4" />
-                                Deactivate
-                              </DropdownMenuItem>
-                            ) : (
-                              <DropdownMenuItem
-                                onClick={() => setActionDialog({ type: 'reactivate', user })}
-                              >
-                                <UserCheck className="mr-2 h-4 w-4" />
-                                Reactivate
-                              </DropdownMenuItem>
-                            )}
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                ) : (
-                  <TableRow>
-                    <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
-                      No users found
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
+                      </div>
+                      <div className="flex items-center gap-1 text-sm text-muted-foreground mb-1">
+                        <Mail className="h-3 w-3" />
+                        <span className="truncate">{user.email}</span>
+                      </div>
+                      {user.phone && (
+                        <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                          <Phone className="h-3 w-3" />
+                          <span>{user.phone}</span>
+                        </div>
+                      )}
+                      <Badge variant="outline" className="mt-2 text-[10px]">
+                        {user.role || 'user'}
+                      </Badge>
+                    </div>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-8 w-8">
+                          <MoreVertical className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem
+                          onClick={() => setActionDialog({ type: 'role', user })}
+                        >
+                          <Shield className="mr-2 h-4 w-4" />
+                          Change Role
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        {user.is_active ? (
+                          <DropdownMenuItem
+                            onClick={() => setActionDialog({ type: 'deactivate', user })}
+                            className="text-destructive"
+                          >
+                            <UserX className="mr-2 h-4 w-4" />
+                            Deactivate
+                          </DropdownMenuItem>
+                        ) : (
+                          <DropdownMenuItem
+                            onClick={() => setActionDialog({ type: 'reactivate', user })}
+                          >
+                            <UserCheck className="mr-2 h-4 w-4" />
+                            Reactivate
+                          </DropdownMenuItem>
+                        )}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                </CardContent>
+              </Card>
+            ))
+          ) : (
+            <Card className="card-elevated">
+              <CardContent className="py-12 text-center text-muted-foreground">
+                No users found
+              </CardContent>
+            </Card>
+          )}
+        </div>
 
         {/* Pagination */}
         {data && data.total > 20 && (
-          <div className="flex justify-center gap-2">
+          <div className="flex justify-center gap-2 pt-2">
             <Button
               variant="outline"
               size="sm"
               disabled={page === 1}
               onClick={() => setPage(page - 1)}
+              className="rounded-xl"
             >
               Previous
             </Button>
             <span className="flex items-center px-4 text-sm text-muted-foreground">
-              Page {page} of {Math.ceil(data.total / 20)}
+              {page} / {Math.ceil(data.total / 20)}
             </span>
             <Button
               variant="outline"
               size="sm"
               disabled={page >= Math.ceil(data.total / 20)}
               onClick={() => setPage(page + 1)}
+              className="rounded-xl"
             >
               Next
             </Button>
@@ -325,7 +289,7 @@ export default function UsersPage() {
 
       {/* Action Dialog */}
       <Dialog open={actionDialog.type !== null} onOpenChange={(open) => !open && closeDialog()}>
-        <DialogContent>
+        <DialogContent className="mx-4 rounded-2xl">
           <DialogHeader>
             <DialogTitle>
               {actionDialog.type === 'deactivate' && 'Deactivate User'}
@@ -334,30 +298,31 @@ export default function UsersPage() {
             </DialogTitle>
             <DialogDescription>
               {actionDialog.type === 'deactivate' && 
-                `Are you sure you want to deactivate ${actionDialog.user?.full_name || actionDialog.user?.email}?`}
+                `Deactivate ${actionDialog.user?.full_name || actionDialog.user?.email}?`}
               {actionDialog.type === 'reactivate' && 
-                `Are you sure you want to reactivate ${actionDialog.user?.full_name || actionDialog.user?.email}?`}
+                `Reactivate ${actionDialog.user?.full_name || actionDialog.user?.email}?`}
               {actionDialog.type === 'role' && 
-                `Change the role for ${actionDialog.user?.full_name || actionDialog.user?.email}`}
+                `Change role for ${actionDialog.user?.full_name || actionDialog.user?.email}`}
             </DialogDescription>
           </DialogHeader>
 
           {actionDialog.type === 'deactivate' && (
             <div className="space-y-2">
-              <Label>Reason for deactivation</Label>
+              <Label>Reason</Label>
               <Textarea
                 value={actionReason}
                 onChange={(e) => setActionReason(e.target.value)}
                 placeholder="Enter reason..."
+                className="rounded-xl"
               />
             </div>
           )}
 
           {actionDialog.type === 'role' && (
             <div className="space-y-2">
-              <Label>Select new role</Label>
+              <Label>New Role</Label>
               <Select value={selectedRole} onValueChange={setSelectedRole}>
-                <SelectTrigger>
+                <SelectTrigger className="rounded-xl">
                   <SelectValue placeholder="Select role" />
                 </SelectTrigger>
                 <SelectContent>
@@ -369,12 +334,15 @@ export default function UsersPage() {
             </div>
           )}
 
-          <DialogFooter>
-            <Button variant="outline" onClick={closeDialog}>Cancel</Button>
+          <DialogFooter className="flex-row gap-2">
+            <Button variant="outline" onClick={closeDialog} className="flex-1 rounded-xl">
+              Cancel
+            </Button>
             <Button 
               onClick={handleAction}
               disabled={isActionLoading || (actionDialog.type === 'role' && !selectedRole)}
               variant={actionDialog.type === 'deactivate' ? 'destructive' : 'default'}
+              className="flex-1 rounded-xl"
             >
               {isActionLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Confirm

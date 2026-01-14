@@ -5,14 +5,6 @@ import { AdminLayout } from '@/components/layout/AdminLayout';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { 
-  Table, 
-  TableBody, 
-  TableCell, 
-  TableHead, 
-  TableHeader, 
-  TableRow 
-} from '@/components/ui/table';
 import {
   Select,
   SelectContent,
@@ -29,21 +21,14 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { 
-  MoreVertical, 
   XCircle, 
   Star,
   Trash2,
   Loader2,
   Calendar,
-  Trophy
+  Users,
+  MapPin
 } from 'lucide-react';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
 import { Label } from '@/components/ui/label';
@@ -75,7 +60,7 @@ export default function EventsPage() {
       adminApi.cancelEvent(eventId, reason),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['events'] });
-      toast.success('Event cancelled successfully');
+      toast.success('Event cancelled');
       closeDialog();
     },
     onError: (error: Error) => {
@@ -98,7 +83,7 @@ export default function EventsPage() {
     mutationFn: (eventId: string) => adminApi.deleteEvent(eventId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['events'] });
-      toast.success('Event deleted successfully');
+      toast.success('Event deleted');
       closeDialog();
     },
     onError: (error: Error) => {
@@ -126,185 +111,169 @@ export default function EventsPage() {
 
   const isActionLoading = cancelMutation.isPending || deleteMutation.isPending;
 
-  const getStatusBadgeVariant = (status: string) => {
+  const getStatusBadgeClass = (status: string) => {
     switch (status) {
       case 'upcoming':
-        return 'default';
+        return 'badge-primary';
       case 'ongoing':
-        return 'secondary';
+        return 'badge-success';
       case 'completed':
-        return 'outline';
+        return 'badge-muted';
       case 'cancelled':
-        return 'destructive';
+        return 'badge-danger';
       default:
-        return 'outline';
+        return 'badge-muted';
+    }
+  };
+
+  const formatEventDate = (dateString: string | undefined | null) => {
+    if (!dateString) return 'N/A';
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return 'Invalid date';
+      return format(date, 'MMM d');
+    } catch {
+      return 'Invalid date';
     }
   };
 
   return (
-    <AdminLayout>
-      <div className="space-y-6">
-        {/* Header */}
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Events</h1>
-          <p className="text-muted-foreground">Manage tournaments, leagues, and friendly matches</p>
+    <AdminLayout title="Events">
+      <div className="space-y-4">
+        {/* Filter */}
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger className="h-11 rounded-xl">
+            <SelectValue placeholder="Filter by status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Events</SelectItem>
+            <SelectItem value="upcoming">Upcoming</SelectItem>
+            <SelectItem value="ongoing">Ongoing</SelectItem>
+            <SelectItem value="completed">Completed</SelectItem>
+            <SelectItem value="cancelled">Cancelled</SelectItem>
+          </SelectContent>
+        </Select>
+
+        {/* Events List */}
+        <div className="space-y-3">
+          {isLoading ? (
+            Array.from({ length: 4 }).map((_, i) => (
+              <Card key={i} className="card-elevated">
+                <CardContent className="p-4">
+                  <div className="space-y-3">
+                    <Skeleton className="h-5 w-3/4" />
+                    <Skeleton className="h-4 w-1/2" />
+                    <Skeleton className="h-4 w-2/3" />
+                  </div>
+                </CardContent>
+              </Card>
+            ))
+          ) : data?.events && data.events.length > 0 ? (
+            data.events.map((event) => (
+              <Card key={event.id} className="card-elevated">
+                <CardContent className="p-4">
+                  <div className="flex items-start justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-semibold text-foreground">{event.title}</h3>
+                      {event.is_featured && (
+                        <Star className="h-4 w-4 fill-warning text-warning" />
+                      )}
+                    </div>
+                    <span className={getStatusBadgeClass(event.status)}>
+                      {event.status}
+                    </span>
+                  </div>
+                  
+                  <div className="space-y-1 mb-3">
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Calendar className="h-3 w-3" />
+                      <span>
+                        {formatEventDate(event.start_date)}
+                        {event.end_date !== event.start_date && ` - ${formatEventDate(event.end_date)}`}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <MapPin className="h-3 w-3" />
+                      <span>{event.venue?.name || 'TBD'}</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Users className="h-3 w-3" />
+                      <span>{event.max_participants} participants max</span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline" className="text-[10px] capitalize">
+                      {event.sport}
+                    </Badge>
+                    <Badge variant="outline" className="text-[10px] capitalize">
+                      {event.event_type}
+                    </Badge>
+                  </div>
+
+                  <div className="flex items-center gap-2 mt-3 pt-3 border-t border-border">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="rounded-lg flex-1"
+                      onClick={() => toggleFeaturedMutation.mutate(event.id)}
+                    >
+                      <Star className={`h-3 w-3 mr-1 ${event.is_featured ? 'fill-warning text-warning' : ''}`} />
+                      {event.is_featured ? 'Unfeature' : 'Feature'}
+                    </Button>
+                    {event.status !== 'cancelled' && event.status !== 'completed' && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="rounded-lg text-destructive"
+                        onClick={() => setActionDialog({ type: 'cancel', event })}
+                      >
+                        <XCircle className="h-3 w-3 mr-1" />
+                        Cancel
+                      </Button>
+                    )}
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-destructive"
+                      onClick={() => setActionDialog({ type: 'delete', event })}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ))
+          ) : (
+            <Card className="card-elevated">
+              <CardContent className="py-12 text-center text-muted-foreground">
+                No events found
+              </CardContent>
+            </Card>
+          )}
         </div>
-
-        {/* Filters */}
-        <Card className="shadow-soft">
-          <CardContent className="p-4">
-            <div className="flex flex-col sm:flex-row gap-4">
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-full sm:w-[180px]">
-                  <SelectValue placeholder="Filter by status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Status</SelectItem>
-                  <SelectItem value="upcoming">Upcoming</SelectItem>
-                  <SelectItem value="ongoing">Ongoing</SelectItem>
-                  <SelectItem value="completed">Completed</SelectItem>
-                  <SelectItem value="cancelled">Cancelled</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Events Table */}
-        <Card className="shadow-soft">
-          <CardContent className="p-0">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Event</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Participants</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {isLoading ? (
-                  Array.from({ length: 5 }).map((_, i) => (
-                    <TableRow key={i}>
-                      <TableCell><Skeleton className="h-4 w-40" /></TableCell>
-                      <TableCell><Skeleton className="h-4 w-24" /></TableCell>
-                      <TableCell><Skeleton className="h-4 w-32" /></TableCell>
-                      <TableCell><Skeleton className="h-4 w-16" /></TableCell>
-                      <TableCell><Skeleton className="h-5 w-20" /></TableCell>
-                      <TableCell><Skeleton className="h-8 w-8 ml-auto" /></TableCell>
-                    </TableRow>
-                  ))
-                ) : data?.events && data.events.length > 0 ? (
-                  data.events.map((event) => (
-                    <TableRow key={event.id}>
-                      <TableCell>
-                        <div className="flex items-center gap-3">
-                          <div className="icon-container-sm bg-primary/10">
-                            <Trophy className="h-4 w-4 text-primary" />
-                          </div>
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <p className="font-medium text-foreground">{event.title}</p>
-                              {event.is_featured && (
-                                <Star className="h-4 w-4 fill-warning text-warning" />
-                              )}
-                            </div>
-                            <p className="text-sm text-muted-foreground capitalize">{event.sport}</p>
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className="capitalize">
-                          {event.event_type}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2 text-foreground">
-                          <Calendar className="h-4 w-4 text-muted-foreground" />
-                          <span>
-                            {format(new Date(event.start_date), 'MMM d')}
-                            {event.end_date !== event.start_date && 
-                              ` - ${format(new Date(event.end_date), 'MMM d')}`}
-                          </span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-foreground">
-                        {event.max_participants}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={getStatusBadgeVariant(event.status)}>
-                          {event.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon">
-                              <MoreVertical className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem
-                              onClick={() => toggleFeaturedMutation.mutate(event.id)}
-                            >
-                              <Star className="mr-2 h-4 w-4" />
-                              {event.is_featured ? 'Remove Featured' : 'Make Featured'}
-                            </DropdownMenuItem>
-                            {event.status !== 'cancelled' && event.status !== 'completed' && (
-                              <DropdownMenuItem
-                                onClick={() => setActionDialog({ type: 'cancel', event })}
-                                className="text-destructive"
-                              >
-                                <XCircle className="mr-2 h-4 w-4" />
-                                Cancel Event
-                              </DropdownMenuItem>
-                            )}
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                              onClick={() => setActionDialog({ type: 'delete', event })}
-                              className="text-destructive"
-                            >
-                              <Trash2 className="mr-2 h-4 w-4" />
-                              Delete
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                ) : (
-                  <TableRow>
-                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
-                      No events found
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
 
         {/* Pagination */}
         {data && data.total > 20 && (
-          <div className="flex justify-center gap-2">
+          <div className="flex justify-center gap-2 pt-2">
             <Button
               variant="outline"
               size="sm"
               disabled={page === 1}
               onClick={() => setPage(page - 1)}
+              className="rounded-xl"
             >
               Previous
             </Button>
             <span className="flex items-center px-4 text-sm text-muted-foreground">
-              Page {page} of {Math.ceil(data.total / 20)}
+              {page} / {Math.ceil(data.total / 20)}
             </span>
             <Button
               variant="outline"
               size="sm"
               disabled={page >= Math.ceil(data.total / 20)}
               onClick={() => setPage(page + 1)}
+              className="rounded-xl"
             >
               Next
             </Button>
@@ -314,37 +283,39 @@ export default function EventsPage() {
 
       {/* Action Dialog */}
       <Dialog open={actionDialog.type !== null} onOpenChange={(open) => !open && closeDialog()}>
-        <DialogContent>
+        <DialogContent className="mx-4 rounded-2xl">
           <DialogHeader>
             <DialogTitle>
-              {actionDialog.type === 'cancel' && 'Cancel Event'}
-              {actionDialog.type === 'delete' && 'Delete Event'}
+              {actionDialog.type === 'cancel' ? 'Cancel Event' : 'Delete Event'}
             </DialogTitle>
             <DialogDescription>
-              {actionDialog.type === 'cancel' && 
-                'This will cancel the event and notify all participants.'}
-              {actionDialog.type === 'delete' && 
-                `Are you sure you want to delete "${actionDialog.event?.title}"? This action cannot be undone.`}
+              {actionDialog.type === 'cancel' 
+                ? 'This will cancel the event and notify all participants.' 
+                : `Delete "${actionDialog.event?.title}"? This cannot be undone.`}
             </DialogDescription>
           </DialogHeader>
 
           {actionDialog.type === 'cancel' && (
             <div className="space-y-2">
-              <Label>Cancellation Reason</Label>
+              <Label>Reason</Label>
               <Textarea
                 value={actionReason}
                 onChange={(e) => setActionReason(e.target.value)}
-                placeholder="Enter reason..."
+                placeholder="Enter cancellation reason..."
+                className="rounded-xl"
               />
             </div>
           )}
 
-          <DialogFooter>
-            <Button variant="outline" onClick={closeDialog}>Cancel</Button>
+          <DialogFooter className="flex-row gap-2">
+            <Button variant="outline" onClick={closeDialog} className="flex-1 rounded-xl">
+              Cancel
+            </Button>
             <Button 
               variant="destructive"
               onClick={handleAction}
               disabled={isActionLoading || (actionDialog.type === 'cancel' && !actionReason)}
+              className="flex-1 rounded-xl"
             >
               {isActionLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               {actionDialog.type === 'cancel' ? 'Cancel Event' : 'Delete'}

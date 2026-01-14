@@ -39,19 +39,19 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-4">
-      <Card className="w-full max-w-md shadow-lg">
-        <CardHeader className="text-center space-y-2">
-          <div className="mx-auto w-12 h-12 rounded-xl bg-primary flex items-center justify-center mb-2">
-            <span className="text-primary-foreground font-bold text-lg">FK</span>
+    <div className="mobile-container flex items-center justify-center p-4">
+      <Card className="w-full card-elevated">
+        <CardHeader className="text-center space-y-3 pb-2">
+          <div className="mx-auto w-14 h-14 rounded-2xl bg-primary flex items-center justify-center">
+            <span className="text-primary-foreground font-bold text-xl">FK</span>
           </div>
-          <CardTitle className="text-2xl">FitKits Admin</CardTitle>
-          <CardDescription>Sign in to access the admin dashboard</CardDescription>
+          <CardTitle className="text-xl">FitKits Admin</CardTitle>
+          <CardDescription>Sign in to access the dashboard</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="pt-4">
           <form onSubmit={handleSubmit} className="space-y-4">
             {error && (
-              <div className="flex items-center gap-2 p-3 rounded-lg bg-destructive/10 text-destructive text-sm">
+              <div className="flex items-center gap-2 p-3 rounded-xl bg-destructive-light text-destructive text-sm">
                 <AlertCircle className="h-4 w-4 flex-shrink-0" />
                 <span>{error}</span>
               </div>
@@ -67,6 +67,7 @@ export default function Login() {
                 onChange={(e) => setEmail(e.target.value)}
                 required
                 disabled={isLoading}
+                className="h-11 rounded-xl"
               />
             </div>
             
@@ -80,10 +81,11 @@ export default function Login() {
                 onChange={(e) => setPassword(e.target.value)}
                 required
                 disabled={isLoading}
+                className="h-11 rounded-xl"
               />
             </div>
             
-            <Button type="submit" className="w-full" disabled={isLoading}>
+            <Button type="submit" className="w-full h-11 rounded-xl" disabled={isLoading}>
               {isLoading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />

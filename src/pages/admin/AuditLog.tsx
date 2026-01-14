@@ -6,14 +6,6 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { 
-  Table, 
-  TableBody, 
-  TableCell, 
-  TableHead, 
-  TableHeader, 
-  TableRow 
-} from '@/components/ui/table';
-import { 
   FileText,
   User,
   Calendar,
@@ -39,14 +31,14 @@ const getActionIcon = (targetType: string) => {
   }
 };
 
-const getActionBadgeVariant = (action: string) => {
+const getActionBadgeClass = (action: string) => {
   if (action.includes('delete') || action.includes('cancel') || action.includes('deactivate')) {
-    return 'destructive';
+    return 'badge-danger';
   }
   if (action.includes('create') || action.includes('activate') || action.includes('reactivate')) {
-    return 'default';
+    return 'badge-success';
   }
-  return 'secondary';
+  return 'badge-muted';
 };
 
 export default function AuditLogPage() {
@@ -63,110 +55,104 @@ export default function AuditLogPage() {
       .replace(/\b\w/g, (l) => l.toUpperCase());
   };
 
-  return (
-    <AdminLayout>
-      <div className="space-y-6">
-        {/* Header */}
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Audit Log</h1>
-          <p className="text-muted-foreground">View admin action history</p>
-        </div>
+  const formatLogDate = (dateString: string | undefined | null) => {
+    if (!dateString) return 'N/A';
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return 'Invalid date';
+      return format(date, 'MMM d, HH:mm');
+    } catch {
+      return 'Invalid date';
+    }
+  };
 
-        {/* Audit Log Table */}
-        <Card className="shadow-soft">
-          <CardContent className="p-0">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Action</TableHead>
-                  <TableHead>Target</TableHead>
-                  <TableHead>Admin</TableHead>
-                  <TableHead>Details</TableHead>
-                  <TableHead>Date</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {isLoading ? (
-                  Array.from({ length: 10 }).map((_, i) => (
-                    <TableRow key={i}>
-                      <TableCell><Skeleton className="h-5 w-28" /></TableCell>
-                      <TableCell><Skeleton className="h-4 w-24" /></TableCell>
-                      <TableCell><Skeleton className="h-4 w-32" /></TableCell>
-                      <TableCell><Skeleton className="h-4 w-48" /></TableCell>
-                      <TableCell><Skeleton className="h-4 w-36" /></TableCell>
-                    </TableRow>
-                  ))
-                ) : data?.logs && data.logs.length > 0 ? (
-                  data.logs.map((log) => {
-                    const Icon = getActionIcon(log.target_type);
-                    return (
-                      <TableRow key={log.id}>
-                        <TableCell>
-                          <Badge variant={getActionBadgeVariant(log.action)}>
-                            {formatAction(log.action)}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <Icon className="h-4 w-4 text-muted-foreground" />
-                            <span className="text-foreground capitalize">{log.target_type}</span>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div>
-                            <p className="font-medium text-foreground">
-                              {log.admin?.full_name || 'Unknown'}
-                            </p>
-                            <p className="text-sm text-muted-foreground">
-                              {log.admin?.email}
-                            </p>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <p className="text-sm text-muted-foreground max-w-xs truncate">
-                            {log.details ? JSON.stringify(log.details) : '-'}
-                          </p>
-                        </TableCell>
-                        <TableCell className="text-muted-foreground">
-                          {format(new Date(log.created_at), 'MMM d, yyyy HH:mm')}
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })
-                ) : (
-                  <TableRow>
-                    <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
-                      <div className="flex flex-col items-center gap-2">
-                        <FileText className="h-8 w-8 text-muted-foreground/50" />
-                        <p>No audit logs found</p>
+  return (
+    <AdminLayout title="Audit Log">
+      <div className="space-y-4">
+        {/* Logs List */}
+        <div className="space-y-3">
+          {isLoading ? (
+            Array.from({ length: 6 }).map((_, i) => (
+              <Card key={i} className="card-elevated">
+                <CardContent className="p-4">
+                  <div className="flex items-start gap-3">
+                    <Skeleton className="h-10 w-10 rounded-xl" />
+                    <div className="flex-1 space-y-2">
+                      <Skeleton className="h-4 w-32" />
+                      <Skeleton className="h-3 w-48" />
+                      <Skeleton className="h-3 w-24" />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))
+          ) : data?.logs && data.logs.length > 0 ? (
+            data.logs.map((log) => {
+              const Icon = getActionIcon(log.target_type);
+              return (
+                <Card key={log.id} className="card-elevated">
+                  <CardContent className="p-4">
+                    <div className="flex items-start gap-3">
+                      <div className="icon-container bg-muted">
+                        <Icon className="h-5 w-5 text-muted-foreground" />
                       </div>
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className={getActionBadgeClass(log.action)}>
+                            {formatAction(log.action)}
+                          </span>
+                          <Badge variant="outline" className="text-[10px] capitalize">
+                            {log.target_type}
+                          </Badge>
+                        </div>
+                        <p className="text-sm text-foreground">
+                          by <span className="font-medium">{log.admin?.full_name || 'Unknown'}</span>
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {formatLogDate(log.created_at)}
+                        </p>
+                        {log.details && Object.keys(log.details).length > 0 && (
+                          <p className="text-xs text-muted-foreground mt-2 truncate">
+                            {JSON.stringify(log.details)}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })
+          ) : (
+            <Card className="card-elevated">
+              <CardContent className="py-12 text-center text-muted-foreground">
+                <FileText className="h-8 w-8 mx-auto mb-2 text-muted-foreground/50" />
+                <p>No audit logs found</p>
+              </CardContent>
+            </Card>
+          )}
+        </div>
 
         {/* Pagination */}
         {data && data.total > 20 && (
-          <div className="flex justify-center gap-2">
+          <div className="flex justify-center gap-2 pt-2">
             <Button
               variant="outline"
               size="sm"
               disabled={page === 1}
               onClick={() => setPage(page - 1)}
+              className="rounded-xl"
             >
               Previous
             </Button>
             <span className="flex items-center px-4 text-sm text-muted-foreground">
-              Page {page} of {Math.ceil(data.total / 20)}
+              {page} / {Math.ceil(data.total / 20)}
             </span>
             <Button
               variant="outline"
               size="sm"
               disabled={page >= Math.ceil(data.total / 20)}
               onClick={() => setPage(page + 1)}
+              className="rounded-xl"
             >
               Next
             </Button>
