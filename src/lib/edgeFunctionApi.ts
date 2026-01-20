@@ -107,7 +107,7 @@ async function handleResponse<T>(response: Response): Promise<T> {
 
 // Edge Function API
 export const edgeFunctionApi = {
-  // ==================== VENUES ====================
+  // ==================== VENUES (Direct Supabase queries) ====================
   async getVenues(params: {
     owner_id?: string;
     category?: string;
@@ -117,52 +117,119 @@ export const edgeFunctionApi = {
     page?: number;
     limit?: number;
   } = {}): Promise<VenuesResponse> {
-    const headers = await getAuthHeaders();
-    const searchParams = new URLSearchParams();
-    
-    if (params.owner_id) searchParams.append('owner_id', params.owner_id);
-    if (params.category) searchParams.append('category', params.category);
-    if (params.sport) searchParams.append('sport', params.sport);
-    if (params.is_active !== undefined) searchParams.append('is_active', String(params.is_active));
-    if (params.search) searchParams.append('search', params.search);
-    if (params.page) searchParams.append('page', String(params.page));
-    if (params.limit) searchParams.append('limit', String(params.limit));
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.user) throw new Error('Not authenticated');
 
-    const response = await fetch(
-      `${FUNCTIONS_URL}/admin-venues?${searchParams.toString()}`,
-      { method: 'GET', headers }
-    );
-    return handleResponse<VenuesResponse>(response);
+    const page = params.page || 1;
+    const limit = params.limit || 20;
+
+    let query = supabase
+      .from('venues')
+      .select('*', { count: 'exact' })
+      .eq('owner_id', session.user.id); // Only show MY venues
+
+    if (params.category) query = query.eq('category', params.category);
+    if (params.search) query = query.ilike('name', `%${params.search}%`);
+    if (params.is_active !== undefined) query = query.eq('is_active', params.is_active);
+
+    const { data, count, error } = await query
+      .order('created_at', { ascending: false })
+      .range((page - 1) * limit, page * limit - 1);
+
+    if (error) {
+      console.error('Get venues error:', error);
+      throw new Error(error.message);
+    }
+
+    return {
+      venues: (data || []).map(v => ({ ...v, location: v.city })) as Venue[],
+      total: count || 0,
+      page,
+      limit,
+    };
   },
 
   async createVenue(venue: Partial<Venue>): Promise<{ venue: Venue }> {
-    const headers = await getAuthHeaders();
-    const response = await fetch(`${FUNCTIONS_URL}/admin-venues`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(venue),
-    });
-    return handleResponse<{ venue: Venue }>(response);
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.user) throw new Error('Not authenticated');
+
+    const { data, error } = await supabase
+      .from('venues')
+      .insert({
+        name: venue.name,
+        slug: venue.slug,
+        category: venue.category,
+        sport: venue.sport,
+        address: venue.address,
+        city: venue.location, // Map location -> city
+        price_per_hour: venue.price_per_hour,
+        image_url: venue.image_url,
+        is_active: venue.is_active ?? true,
+        amenities: venue.amenities || [],
+        owner_id: session.user.id, // Set current user as owner
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Create venue error:', error);
+      throw new Error(error.message);
+    }
+
+    return { venue: { ...data, location: data.city } as Venue };
   },
 
   async updateVenue(venueId: string, updates: Partial<Venue>): Promise<{ venue: Venue }> {
-    const headers = await getAuthHeaders();
-    const response = await fetch(`${FUNCTIONS_URL}/admin-venues`, {
-      method: 'PATCH',
-      headers,
-      body: JSON.stringify({ venueId, ...updates }),
-    });
-    return handleResponse<{ venue: Venue }>(response);
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.user) throw new Error('Not authenticated');
+
+    const updateData: Record<string, any> = {};
+    if (updates.name !== undefined) updateData.name = updates.name;
+    if (updates.slug !== undefined) updateData.slug = updates.slug;
+    if (updates.category !== undefined) updateData.category = updates.category;
+    if (updates.sport !== undefined) updateData.sport = updates.sport;
+    if (updates.address !== undefined) updateData.address = updates.address;
+    if (updates.location !== undefined) updateData.city = updates.location;
+    if (updates.price_per_hour !== undefined) updateData.price_per_hour = updates.price_per_hour;
+    if (updates.image_url !== undefined) updateData.image_url = updates.image_url;
+    if (updates.is_active !== undefined) updateData.is_active = updates.is_active;
+    if (updates.amenities !== undefined) updateData.amenities = updates.amenities;
+    if (updates.opening_time !== undefined) updateData.opening_time = updates.opening_time;
+    if (updates.closing_time !== undefined) updateData.closing_time = updates.closing_time;
+    if (updates.description !== undefined) updateData.description = updates.description;
+
+    const { data, error } = await supabase
+      .from('venues')
+      .update(updateData)
+      .eq('id', venueId)
+      .eq('owner_id', session.user.id) // Extra owner check
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Update venue error:', error);
+      throw new Error(error.message);
+    }
+
+    return { venue: { ...data, location: data.city } as Venue };
   },
 
   async deleteVenue(venueId: string): Promise<{ success: boolean }> {
-    const headers = await getAuthHeaders();
-    const response = await fetch(`${FUNCTIONS_URL}/admin-venues`, {
-      method: 'DELETE',
-      headers,
-      body: JSON.stringify({ venueId }),
-    });
-    return handleResponse<{ success: boolean }>(response);
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.user) throw new Error('Not authenticated');
+
+    const { error } = await supabase
+      .from('venues')
+      .update({ is_active: false }) // Soft delete
+      .eq('id', venueId)
+      .eq('owner_id', session.user.id);
+
+    if (error) {
+      console.error('Delete venue error:', error);
+      throw new Error(error.message);
+    }
+
+    return { success: true };
   },
 
   // ==================== BOOKINGS ====================
