@@ -1,4 +1,4 @@
-import { supabase, FUNCTIONS_URL } from './supabase';
+import { supabase } from './supabase';
 
 // Types
 export interface User {
@@ -84,30 +84,9 @@ export interface SlotBlocksResponse {
   limit: number;
 }
 
-// Helper to get auth headers
-async function getAuthHeaders(): Promise<HeadersInit> {
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session?.access_token) {
-    throw new Error('Not authenticated');
-  }
-  return {
-    'Authorization': `Bearer ${session.access_token}`,
-    'Content-Type': 'application/json',
-  };
-}
-
-// Helper to handle API response
-async function handleResponse<T>(response: Response): Promise<T> {
-  const data = await response.json();
-  if (!response.ok) {
-    throw new Error(data.error || data.message || 'API request failed');
-  }
-  return data;
-}
-
-// Edge Function API
+// Edge Function API using supabase.functions.invoke()
 export const edgeFunctionApi = {
-  // ==================== VENUES (Direct Supabase queries) ====================
+  // ==================== VENUES (via Edge Function) ====================
   async getVenues(params: {
     owner_id?: string;
     category?: string;
@@ -120,32 +99,34 @@ export const edgeFunctionApi = {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session?.user) throw new Error('Not authenticated');
 
-    const page = params.page || 1;
-    const limit = params.limit || 20;
+    // Build query params for Edge Function
+    const queryParams = new URLSearchParams();
+    if (params.category) queryParams.append('category', params.category);
+    if (params.search) queryParams.append('search', params.search);
+    if (params.is_active !== undefined) queryParams.append('is_active', String(params.is_active));
+    if (params.page) queryParams.append('page', String(params.page));
+    if (params.limit) queryParams.append('limit', String(params.limit));
 
-    let query = supabase
-      .from('venues')
-      .select('*', { count: 'exact' })
-      .eq('owner_id', session.user.id); // Only show MY venues
-
-    if (params.category) query = query.eq('category', params.category);
-    if (params.search) query = query.ilike('name', `%${params.search}%`);
-    if (params.is_active !== undefined) query = query.eq('is_active', params.is_active);
-
-    const { data, count, error } = await query
-      .order('created_at', { ascending: false })
-      .range((page - 1) * limit, page * limit - 1);
+    const { data, error } = await supabase.functions.invoke('admin-venues', {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
 
     if (error) {
       console.error('Get venues error:', error);
       throw new Error(error.message);
     }
 
+    // Map the response - the Edge Function returns venues directly or in a wrapper
+    const venues = Array.isArray(data) ? data : (data?.venues || []);
+    
     return {
-      venues: (data || []).map(v => ({ ...v, location: v.city })) as Venue[],
-      total: count || 0,
-      page,
-      limit,
+      venues: venues.map((v: any) => ({ ...v, location: v.city || v.location })) as Venue[],
+      total: data?.total || venues.length,
+      page: params.page || 1,
+      limit: params.limit || 20,
     };
   },
 
@@ -153,37 +134,36 @@ export const edgeFunctionApi = {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session?.user) throw new Error('Not authenticated');
 
-    const { data, error } = await supabase
-      .from('venues')
-      .insert({
+    const { data, error } = await supabase.functions.invoke('admin-venues', {
+      method: 'POST',
+      body: {
         name: venue.name,
         slug: venue.slug,
         category: venue.category,
         sport: venue.sport,
         address: venue.address,
-        city: venue.location, // Map location -> city
+        city: venue.location,
         price_per_hour: venue.price_per_hour,
         image_url: venue.image_url,
         is_active: venue.is_active ?? true,
         amenities: venue.amenities || [],
-        owner_id: session.user.id, // Set current user as owner
-      })
-      .select()
-      .single();
+      },
+    });
 
     if (error) {
       console.error('Create venue error:', error);
       throw new Error(error.message);
     }
 
-    return { venue: { ...data, location: data.city } as Venue };
+    const venueData = data?.venue || data;
+    return { venue: { ...venueData, location: venueData.city || venueData.location } as Venue };
   },
 
   async updateVenue(venueId: string, updates: Partial<Venue>): Promise<{ venue: Venue }> {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session?.user) throw new Error('Not authenticated');
 
-    const updateData: Record<string, any> = {};
+    const updateData: Record<string, any> = { venueId };
     if (updates.name !== undefined) updateData.name = updates.name;
     if (updates.slug !== undefined) updateData.slug = updates.slug;
     if (updates.category !== undefined) updateData.category = updates.category;
@@ -198,31 +178,28 @@ export const edgeFunctionApi = {
     if (updates.closing_time !== undefined) updateData.closing_time = updates.closing_time;
     if (updates.description !== undefined) updateData.description = updates.description;
 
-    const { data, error } = await supabase
-      .from('venues')
-      .update(updateData)
-      .eq('id', venueId)
-      .eq('owner_id', session.user.id) // Extra owner check
-      .select()
-      .single();
+    const { data, error } = await supabase.functions.invoke('admin-venues', {
+      method: 'PATCH',
+      body: updateData,
+    });
 
     if (error) {
       console.error('Update venue error:', error);
       throw new Error(error.message);
     }
 
-    return { venue: { ...data, location: data.city } as Venue };
+    const venueData = data?.venue || data;
+    return { venue: { ...venueData, location: venueData.city || venueData.location } as Venue };
   },
 
   async deleteVenue(venueId: string): Promise<{ success: boolean }> {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session?.user) throw new Error('Not authenticated');
 
-    const { error } = await supabase
-      .from('venues')
-      .update({ is_active: false }) // Soft delete
-      .eq('id', venueId)
-      .eq('owner_id', session.user.id);
+    const { data, error } = await supabase.functions.invoke('admin-venues', {
+      method: 'DELETE',
+      body: { venueId },
+    });
 
     if (error) {
       console.error('Delete venue error:', error);
@@ -232,7 +209,7 @@ export const edgeFunctionApi = {
     return { success: true };
   },
 
-  // ==================== BOOKINGS ====================
+  // ==================== BOOKINGS (via Edge Function) ====================
   async getBookings(params: {
     venue_id?: string;
     status?: string;
@@ -242,45 +219,62 @@ export const edgeFunctionApi = {
     page?: number;
     limit?: number;
   } = {}): Promise<BookingsResponse> {
-    const headers = await getAuthHeaders();
-    const searchParams = new URLSearchParams();
-    
-    if (params.venue_id) searchParams.append('venue_id', params.venue_id);
-    if (params.status) searchParams.append('status', params.status);
-    if (params.user_id) searchParams.append('user_id', params.user_id);
-    if (params.date_from) searchParams.append('date_from', params.date_from);
-    if (params.date_to) searchParams.append('date_to', params.date_to);
-    if (params.page) searchParams.append('page', String(params.page));
-    if (params.limit) searchParams.append('limit', String(params.limit));
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.user) throw new Error('Not authenticated');
 
-    const response = await fetch(
-      `${FUNCTIONS_URL}/admin-bookings?${searchParams.toString()}`,
-      { method: 'GET', headers }
-    );
-    return handleResponse<BookingsResponse>(response);
+    const { data, error } = await supabase.functions.invoke('admin-bookings', {
+      method: 'GET',
+      body: params,
+    });
+
+    if (error) {
+      console.error('Get bookings error:', error);
+      throw new Error(error.message);
+    }
+
+    return {
+      bookings: data?.bookings || [],
+      total: data?.total || 0,
+      page: data?.page || 1,
+      limit: data?.limit || 20,
+    };
   },
 
   async cancelBooking(bookingId: string, reason: string): Promise<{ booking: Booking }> {
-    const headers = await getAuthHeaders();
-    const response = await fetch(`${FUNCTIONS_URL}/admin-bookings`, {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.user) throw new Error('Not authenticated');
+
+    const { data, error } = await supabase.functions.invoke('admin-bookings', {
       method: 'PATCH',
-      headers,
-      body: JSON.stringify({ bookingId, action: 'cancel', reason }),
+      body: { bookingId, action: 'cancel', reason },
     });
-    return handleResponse<{ booking: Booking }>(response);
+
+    if (error) {
+      console.error('Cancel booking error:', error);
+      throw new Error(error.message);
+    }
+
+    return { booking: data?.booking || data };
   },
 
   async refundBooking(bookingId: string, reason: string): Promise<{ booking: Booking }> {
-    const headers = await getAuthHeaders();
-    const response = await fetch(`${FUNCTIONS_URL}/admin-bookings`, {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.user) throw new Error('Not authenticated');
+
+    const { data, error } = await supabase.functions.invoke('admin-bookings', {
       method: 'PATCH',
-      headers,
-      body: JSON.stringify({ bookingId, action: 'refund', reason }),
+      body: { bookingId, action: 'refund', reason },
     });
-    return handleResponse<{ booking: Booking }>(response);
+
+    if (error) {
+      console.error('Refund booking error:', error);
+      throw new Error(error.message);
+    }
+
+    return { booking: data?.booking || data };
   },
 
-  // ==================== SLOT BLOCKS ====================
+  // ==================== SLOT BLOCKS (via Edge Function) ====================
   async getBlockedSlots(params: {
     venue_id: string;
     date_from?: string;
@@ -288,35 +282,47 @@ export const edgeFunctionApi = {
     page?: number;
     limit?: number;
   }): Promise<SlotBlocksResponse> {
-    const headers = await getAuthHeaders();
-    const searchParams = new URLSearchParams();
-    
-    searchParams.append('venue_id', params.venue_id);
-    if (params.date_from) searchParams.append('date_from', params.date_from);
-    if (params.date_to) searchParams.append('date_to', params.date_to);
-    if (params.page) searchParams.append('page', String(params.page));
-    if (params.limit) searchParams.append('limit', String(params.limit));
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.user) throw new Error('Not authenticated');
 
-    const response = await fetch(
-      `${FUNCTIONS_URL}/admin-slot-blocks?${searchParams.toString()}`,
-      { method: 'GET', headers }
-    );
-    return handleResponse<SlotBlocksResponse>(response);
+    const { data, error } = await supabase.functions.invoke('admin-slot-blocks', {
+      method: 'GET',
+      body: params,
+    });
+
+    if (error) {
+      console.error('Get blocked slots error:', error);
+      throw new Error(error.message);
+    }
+
+    return {
+      blocks: data?.blocks || [],
+      total: data?.total || 0,
+      page: data?.page || 1,
+      limit: data?.limit || 20,
+    };
   },
 
   async blockSlot(venueId: string, slotDate: string, slotTime: string, reason?: string): Promise<{ block: SlotBlock }> {
-    const headers = await getAuthHeaders();
-    const response = await fetch(`${FUNCTIONS_URL}/admin-slot-blocks`, {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.user) throw new Error('Not authenticated');
+
+    const { data, error } = await supabase.functions.invoke('admin-slot-blocks', {
       method: 'POST',
-      headers,
-      body: JSON.stringify({
+      body: {
         venue_id: venueId,
         slot_date: slotDate,
         slot_time: slotTime,
         reason: reason || 'Blocked by admin',
-      }),
+      },
     });
-    return handleResponse<{ block: SlotBlock }>(response);
+
+    if (error) {
+      console.error('Block slot error:', error);
+      throw new Error(error.message);
+    }
+
+    return { block: data?.block || data };
   },
 
   async blockMultipleSlots(slots: Array<{
@@ -325,27 +331,41 @@ export const edgeFunctionApi = {
     slot_time: string;
     reason?: string;
   }>): Promise<{ blocks: SlotBlock[] }> {
-    const headers = await getAuthHeaders();
-    const response = await fetch(`${FUNCTIONS_URL}/admin-slot-blocks`, {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.user) throw new Error('Not authenticated');
+
+    const { data, error } = await supabase.functions.invoke('admin-slot-blocks', {
       method: 'POST',
-      headers,
-      body: JSON.stringify({ slots }),
+      body: { slots },
     });
-    return handleResponse<{ blocks: SlotBlock[] }>(response);
+
+    if (error) {
+      console.error('Block multiple slots error:', error);
+      throw new Error(error.message);
+    }
+
+    return { blocks: data?.blocks || [] };
   },
 
   async unblockSlot(venueId: string, slotDate: string, slotTime: string): Promise<{ success: boolean }> {
-    const headers = await getAuthHeaders();
-    const response = await fetch(`${FUNCTIONS_URL}/admin-slot-blocks`, {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.user) throw new Error('Not authenticated');
+
+    const { data, error } = await supabase.functions.invoke('admin-slot-blocks', {
       method: 'DELETE',
-      headers,
-      body: JSON.stringify({
+      body: {
         venue_id: venueId,
         slot_date: slotDate,
         slot_time: slotTime,
-      }),
+      },
     });
-    return handleResponse<{ success: boolean }>(response);
+
+    if (error) {
+      console.error('Unblock slot error:', error);
+      throw new Error(error.message);
+    }
+
+    return { success: true };
   },
 
   // ==================== ANALYTICS (direct query for now) ====================

@@ -9,7 +9,7 @@ interface ProtectedRouteProps {
 }
 
 export function ProtectedRoute({ children }: ProtectedRouteProps) {
-  const { user, isAdmin, isLoading } = useAuth();
+  const { user, userRole, isLoading } = useAuth();
   const location = useLocation();
   const [loadingTimeout, setLoadingTimeout] = useState(false);
 
@@ -61,7 +61,8 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
     );
   }
 
-  if (!user || !isAdmin) {
+  // Allow access for admin or venue_owner roles
+  if (!user || !userRole) {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
