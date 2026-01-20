@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { directApi, Venue } from '@/lib/directApi';
+import { edgeFunctionApi, Venue } from '@/lib/edgeFunctionApi';
 import { AdminLayout } from '@/components/layout/AdminLayout';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -38,6 +38,7 @@ import { Textarea } from '@/components/ui/textarea';
 
 const defaultVenue: Partial<Venue> = {
   name: '',
+  slug: '',
   category: 'courts',
   sport: '',
   location: '',
@@ -63,7 +64,7 @@ export default function VenuesPage() {
 
   const { data, isLoading } = useQuery({
     queryKey: ['venues', { search, category: categoryFilter, page }],
-    queryFn: () => directApi.getVenues({
+    queryFn: () => edgeFunctionApi.getVenues({
       search: search || undefined,
       category: categoryFilter !== 'all' ? categoryFilter : undefined,
       page,
@@ -72,7 +73,7 @@ export default function VenuesPage() {
   });
 
   const createMutation = useMutation({
-    mutationFn: (venue: Partial<Venue>) => directApi.createVenue(venue),
+    mutationFn: (venue: Partial<Venue>) => edgeFunctionApi.createVenue(venue),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['venues'] });
       toast.success('Venue created');
@@ -85,7 +86,7 @@ export default function VenuesPage() {
 
   const updateMutation = useMutation({
     mutationFn: ({ venueId, updates }: { venueId: string; updates: Partial<Venue> }) =>
-      directApi.updateVenue(venueId, updates),
+      edgeFunctionApi.updateVenue(venueId, updates),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['venues'] });
       toast.success('Venue updated');
@@ -97,7 +98,7 @@ export default function VenuesPage() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (venueId: string) => directApi.deleteVenue(venueId),
+    mutationFn: (venueId: string) => edgeFunctionApi.deleteVenue(venueId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['venues'] });
       toast.success('Venue deleted');
@@ -310,6 +311,19 @@ export default function VenuesPage() {
                 />
               </div>
 
+              <div className="space-y-2">
+                <Label>Slug (URL-friendly name)</Label>
+                <Input
+                  value={editDialog.venue.slug}
+                  onChange={(e) => setEditDialog(prev => ({
+                    ...prev,
+                    venue: { ...prev.venue!, slug: e.target.value.toLowerCase().replace(/\s+/g, '-') }
+                  }))}
+                  placeholder="venue-name"
+                  className="rounded-xl"
+                />
+              </div>
+
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-2">
                   <Label>Category</Label>
@@ -346,7 +360,7 @@ export default function VenuesPage() {
               </div>
 
               <div className="space-y-2">
-                <Label>Location</Label>
+                <Label>Location (City)</Label>
                 <Input
                   value={editDialog.venue.location}
                   onChange={(e) => setEditDialog(prev => ({
@@ -359,7 +373,7 @@ export default function VenuesPage() {
               </div>
 
               <div className="space-y-2">
-                <Label>Address</Label>
+                <Label>Full Address</Label>
                 <Textarea
                   value={editDialog.venue.address}
                   onChange={(e) => setEditDialog(prev => ({
