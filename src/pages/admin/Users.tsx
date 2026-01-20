@@ -185,7 +185,7 @@ export default function UsersPage() {
                   <div className="flex items-start gap-3">
                     <div className="h-12 w-12 rounded-full bg-primary-light flex items-center justify-center flex-shrink-0">
                       <span className="text-primary font-semibold text-lg">
-                        {user.full_name?.[0]?.toUpperCase() || user.email[0].toUpperCase()}
+                        {user.full_name?.[0]?.toUpperCase() || user.email?.[0]?.toUpperCase() || 'U'}
                       </span>
                     </div>
                     <div className="flex-1 min-w-0">
