@@ -2,9 +2,12 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 
+type UserRole = 'admin' | 'venue_owner' | null;
+
 interface AuthContextType {
   user: User | null;
   session: Session | null;
+  userRole: UserRole;
   isAdmin: boolean;
   isLoading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
@@ -16,34 +19,60 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [userRole, setUserRole] = useState<UserRole>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  const checkAdminRole = async (userId: string): Promise<boolean> => {
+  // Check if user has admin role
+  const checkRole = async (userId: string, role: 'admin' | 'venue_owner'): Promise<boolean> => {
     try {
-      console.log('[Auth] Checking admin role for user:', userId);
+      const { data, error } = await supabase.rpc('has_role', {
+        _user_id: userId,
+        _role: role
+      });
+      if (error) {
+        console.error(`[Auth] Error checking ${role} role:`, error);
+        return false;
+      }
+      return data === true;
+    } catch (err) {
+      console.error(`[Auth] Exception checking ${role} role:`, err);
+      return false;
+    }
+  };
+
+  // Check user's role (admin or venue_owner)
+  const checkUserRole = async (userId: string): Promise<UserRole> => {
+    try {
+      console.log('[Auth] Checking user role for:', userId);
       
       // Add timeout to prevent hanging
-      const timeoutPromise = new Promise<boolean>((_, reject) => {
-        setTimeout(() => reject(new Error('Admin check timeout')), 5000);
+      const timeoutPromise = new Promise<UserRole>((_, reject) => {
+        setTimeout(() => reject(new Error('Role check timeout')), 5000);
       });
       
-      const checkPromise = supabase.rpc('has_role', {
-        _user_id: userId,
-        _role: 'admin'
-      }).then(({ data, error }) => {
-        if (error) {
-          console.error('[Auth] Error checking admin role:', error);
-          return false;
+      const checkPromise = (async () => {
+        // Check admin first
+        const isAdmin = await checkRole(userId, 'admin');
+        if (isAdmin) {
+          console.log('[Auth] User has admin role');
+          return 'admin' as UserRole;
         }
-        console.log('[Auth] Admin role check result:', data);
-        return data === true;
-      });
+        
+        // Check venue_owner
+        const isVenueOwner = await checkRole(userId, 'venue_owner');
+        if (isVenueOwner) {
+          console.log('[Auth] User has venue_owner role');
+          return 'venue_owner' as UserRole;
+        }
+        
+        console.log('[Auth] User has no valid role');
+        return null;
+      })();
       
       return await Promise.race([checkPromise, timeoutPromise]);
     } catch (err) {
-      console.error('[Auth] Error checking admin role:', err);
-      return false;
+      console.error('[Auth] Error checking user role:', err);
+      return null;
     }
   };
 
@@ -64,10 +93,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(initialSession?.user ?? null);
         
         if (initialSession?.user) {
-          const adminStatus = await checkAdminRole(initialSession.user.id);
+          const role = await checkUserRole(initialSession.user.id);
           if (mounted) {
-            setIsAdmin(adminStatus);
-            console.log('[Auth] Admin status set:', adminStatus);
+            setUserRole(role);
+            console.log('[Auth] User role set:', role);
           }
         }
       } catch (error) {
@@ -91,16 +120,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setSession(newSession);
         setUser(newSession?.user ?? null);
         
-        // Defer admin check to avoid deadlock
+        // Defer role check to avoid deadlock
         if (newSession?.user) {
           setTimeout(() => {
             if (!mounted) return;
-            checkAdminRole(newSession.user.id).then(adminStatus => {
-              if (mounted) setIsAdmin(adminStatus);
+            checkUserRole(newSession.user.id).then(role => {
+              if (mounted) setUserRole(role);
             });
           }, 0);
         } else {
-          setIsAdmin(false);
+          setUserRole(null);
         }
       }
     );
@@ -125,16 +154,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       if (data.user) {
-        const adminStatus = await checkAdminRole(data.user.id);
+        const role = await checkUserRole(data.user.id);
         
-        if (!adminStatus) {
-          console.log('[Auth] User is not admin, signing out');
+        if (!role) {
+          console.log('[Auth] User has no valid role, signing out');
           await supabase.auth.signOut();
-          return { error: new Error('Admin access required. Please contact your administrator.') };
+          return { error: new Error('Access denied. You must be an admin or venue owner to access this app.') };
         }
         
-        setIsAdmin(true);
-        console.log('[Auth] Sign in successful, user is admin');
+        setUserRole(role);
+        console.log('[Auth] Sign in successful, user role:', role);
       }
 
       return { error: null };
@@ -149,11 +178,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await supabase.auth.signOut();
     setUser(null);
     setSession(null);
-    setIsAdmin(false);
+    setUserRole(null);
   };
 
+  // isAdmin is true if userRole is 'admin'
+  const isAdmin = userRole === 'admin';
+
   return (
-    <AuthContext.Provider value={{ user, session, isAdmin, isLoading, signIn, signOut }}>
+    <AuthContext.Provider value={{ user, session, userRole, isAdmin, isLoading, signIn, signOut }}>
       {children}
     </AuthContext.Provider>
   );
