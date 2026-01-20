@@ -119,8 +119,16 @@ export default function VenuesPage() {
       toast.error('Venue name is required');
       return;
     }
+    if (!venue.location?.trim()) {
+      toast.error('Location (city) is required');
+      return;
+    }
     if (!venue.address?.trim()) {
       toast.error('Address is required');
+      return;
+    }
+    if (!venue.sport?.trim()) {
+      toast.error('Sport is required');
       return;
     }
 
@@ -377,7 +385,7 @@ export default function VenuesPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label>Sport</Label>
+                  <Label>Sport *</Label>
                   <Input
                     value={editDialog.venue.sport}
                     onChange={(e) => setEditDialog(prev => ({
@@ -391,7 +399,7 @@ export default function VenuesPage() {
               </div>
 
               <div className="space-y-2">
-                <Label>Location (City)</Label>
+                <Label>Location (City) *</Label>
                 <Input
                   value={editDialog.venue.location}
                   onChange={(e) => setEditDialog(prev => ({
