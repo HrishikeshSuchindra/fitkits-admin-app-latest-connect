@@ -17,10 +17,10 @@ import NotFound from "./pages/NotFound";
 const queryClient = new QueryClient();
 
 function AppRoutes() {
-  const { user, isAdmin, isLoading } = useAuth();
+  const { user, userRole, isLoading } = useAuth();
 
-  // Redirect logged-in admin users away from login page
-  if (!isLoading && user && isAdmin) {
+  // Redirect logged-in users with valid roles away from login page
+  if (!isLoading && user && userRole) {
     return (
       <Routes>
         <Route path="/login" element={<Navigate to="/" replace />} />
