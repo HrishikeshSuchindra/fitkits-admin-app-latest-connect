@@ -112,12 +112,32 @@ export default function VenuesPage() {
   const handleSave = () => {
     if (!editDialog.venue) return;
 
+    const venue = editDialog.venue;
+
+    // Validate required fields
+    if (!venue.name?.trim()) {
+      toast.error('Venue name is required');
+      return;
+    }
+    if (!venue.address?.trim()) {
+      toast.error('Address is required');
+      return;
+    }
+
+    // Auto-generate slug if empty
+    const slug = venue.slug?.trim() || venue.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+
+    const venueToSave = {
+      ...venue,
+      slug,
+    };
+
     if (editDialog.isNew) {
-      createMutation.mutate(editDialog.venue);
+      createMutation.mutate(venueToSave);
     } else {
       updateMutation.mutate({
-        venueId: editDialog.venue.id!,
-        updates: editDialog.venue,
+        venueId: venue.id!,
+        updates: venueToSave,
       });
     }
   };
@@ -299,13 +319,24 @@ export default function VenuesPage() {
           {editDialog.venue && (
             <div className="space-y-4">
               <div className="space-y-2">
-                <Label>Venue Name</Label>
+                <Label>Venue Name *</Label>
                 <Input
                   value={editDialog.venue.name}
-                  onChange={(e) => setEditDialog(prev => ({
-                    ...prev,
-                    venue: { ...prev.venue!, name: e.target.value }
-                  }))}
+                  onChange={(e) => {
+                    const name = e.target.value;
+                    const autoSlug = name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+                    setEditDialog(prev => ({
+                      ...prev,
+                      venue: { 
+                        ...prev.venue!, 
+                        name,
+                        // Auto-generate slug if it's empty or matches previous auto-generated pattern
+                        slug: !prev.venue?.slug || prev.venue.slug === prev.venue.name?.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
+                          ? autoSlug 
+                          : prev.venue.slug
+                      }
+                    }));
+                  }}
                   placeholder="Enter venue name"
                   className="rounded-xl"
                 />
@@ -373,7 +404,7 @@ export default function VenuesPage() {
               </div>
 
               <div className="space-y-2">
-                <Label>Full Address</Label>
+                <Label>Full Address *</Label>
                 <Textarea
                   value={editDialog.venue.address}
                   onChange={(e) => setEditDialog(prev => ({
