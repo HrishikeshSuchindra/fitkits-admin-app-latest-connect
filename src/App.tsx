@@ -7,9 +7,9 @@ import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import Login from "./pages/Login";
 import AdminDashboard from "./pages/admin/Dashboard";
-import UsersPage from "./pages/admin/Users";
 import BookingsPage from "./pages/admin/Bookings";
 import VenuesPage from "./pages/admin/Venues";
+import SlotBlocksPage from "./pages/admin/SlotBlocks";
 import EventsPage from "./pages/admin/Events";
 import AuditLogPage from "./pages/admin/AuditLog";
 import NotFound from "./pages/NotFound";
@@ -25,9 +25,9 @@ function AppRoutes() {
       <Routes>
         <Route path="/login" element={<Navigate to="/" replace />} />
         <Route path="/" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
-        <Route path="/users" element={<ProtectedRoute><UsersPage /></ProtectedRoute>} />
         <Route path="/bookings" element={<ProtectedRoute><BookingsPage /></ProtectedRoute>} />
         <Route path="/venues" element={<ProtectedRoute><VenuesPage /></ProtectedRoute>} />
+        <Route path="/slot-blocks" element={<ProtectedRoute><SlotBlocksPage /></ProtectedRoute>} />
         <Route path="/events" element={<ProtectedRoute><EventsPage /></ProtectedRoute>} />
         <Route path="/audit-log" element={<ProtectedRoute><AuditLogPage /></ProtectedRoute>} />
         <Route path="*" element={<NotFound />} />
@@ -39,9 +39,9 @@ function AppRoutes() {
     <Routes>
       <Route path="/login" element={<Login />} />
       <Route path="/" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
-      <Route path="/users" element={<ProtectedRoute><UsersPage /></ProtectedRoute>} />
       <Route path="/bookings" element={<ProtectedRoute><BookingsPage /></ProtectedRoute>} />
       <Route path="/venues" element={<ProtectedRoute><VenuesPage /></ProtectedRoute>} />
+      <Route path="/slot-blocks" element={<ProtectedRoute><SlotBlocksPage /></ProtectedRoute>} />
       <Route path="/events" element={<ProtectedRoute><EventsPage /></ProtectedRoute>} />
       <Route path="/audit-log" element={<ProtectedRoute><AuditLogPage /></ProtectedRoute>} />
       <Route path="*" element={<NotFound />} />

@@ -1,10 +1,9 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { directApi, Booking } from '@/lib/directApi';
+import { edgeFunctionApi, Booking } from '@/lib/edgeFunctionApi';
 import { AdminLayout } from '@/components/layout/AdminLayout';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import {
   Select,
   SelectContent,
@@ -25,7 +24,6 @@ import {
   RefreshCw,
   Loader2,
   Clock,
-  Phone,
   MapPin
 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -47,7 +45,7 @@ export default function BookingsPage() {
 
   const { data, isLoading } = useQuery({
     queryKey: ['bookings', { status: statusFilter, page }],
-    queryFn: () => directApi.getBookings({
+    queryFn: () => edgeFunctionApi.getBookings({
       status: statusFilter !== 'all' ? statusFilter : undefined,
       page,
       limit: 20,
@@ -56,7 +54,7 @@ export default function BookingsPage() {
 
   const cancelMutation = useMutation({
     mutationFn: ({ bookingId, reason }: { bookingId: string; reason: string }) =>
-      directApi.cancelBooking(bookingId, reason),
+      edgeFunctionApi.cancelBooking(bookingId, reason),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['bookings'] });
       toast.success('Booking cancelled');
@@ -69,7 +67,7 @@ export default function BookingsPage() {
 
   const refundMutation = useMutation({
     mutationFn: ({ bookingId, reason }: { bookingId: string; reason: string }) =>
-      directApi.refundBooking(bookingId, reason),
+      edgeFunctionApi.refundBooking(bookingId, reason),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['bookings'] });
       toast.success('Refund processed');
