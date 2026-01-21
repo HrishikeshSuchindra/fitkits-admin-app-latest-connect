@@ -69,14 +69,16 @@ export function TimeSlotGrid({
         {slots.map((slot) => {
           const state = getSlotState(slot);
           const isSelected = selectedSlots.includes(slot.time);
-          const isClickable = state !== 'blocked';
+          // In the admin slot-blocking flow, blocked slots must remain clickable so
+          // the parent can interpret a click as an "unblock" action.
+          const isClickable = true;
 
           return (
             <Tooltip key={slot.time}>
               <TooltipTrigger asChild>
                 <button
                   onClick={() => isClickable && onSlotToggle(slot.time)}
-                  disabled={!isClickable}
+                  disabled={false}
                   className={cn(
                     'slot-button',
                     state === 'available' && 'slot-available',

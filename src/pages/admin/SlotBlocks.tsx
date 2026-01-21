@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { edgeFunctionApi, Venue, SlotAvailability } from '@/lib/edgeFunctionApi';
+import { edgeFunctionApi, SlotAvailability } from '@/lib/edgeFunctionApi';
 import { AdminLayout } from '@/components/layout/AdminLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -14,7 +14,6 @@ import {
 import { 
   Calendar as CalendarIcon,
   Lock,
-  Unlock,
   Loader2,
   AlertCircle,
   X,
@@ -29,7 +28,6 @@ import { AvailabilityCalendar } from '@/components/ui/AvailabilityCalendar';
 import { TimeSlotGrid } from '@/components/ui/TimeSlotGrid';
 import { BlockSlotDialog } from '@/components/ui/BlockSlotDialog';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
-import { cn } from '@/lib/utils';
 
 // Generate 30-minute time slots from opening to closing time
 function generate30MinSlots(openingTime: string = '07:00', closingTime: string = '21:00'): string[] {
@@ -154,24 +152,19 @@ export default function SlotBlocksPage() {
     });
   }, [allTimeSlots, slotAvailability?.slots]);
 
-  // Handle undo - permanent, available anytime
-  const handleUndo = async () => {
-    if (!lastBlockAction) return;
-
+  // Undo helpers
+  const performUndo = async (action: LastBlockAction) => {
     try {
-      if (lastBlockAction.type === 'fullDay') {
-        await edgeFunctionApi.unblockFullDay(lastBlockAction.venueId, lastBlockAction.date);
+      if (action.type === 'fullDay') {
+        await edgeFunctionApi.unblockFullDay(action.venueId, action.date);
         toast.success('Full day block undone');
       } else {
-        // Unblock each slot individually
         await Promise.all(
-          lastBlockAction.slots.map(time =>
-            edgeFunctionApi.unblockSlot(lastBlockAction.venueId, lastBlockAction.date, time)
-          )
+          action.slots.map(time => edgeFunctionApi.unblockSlot(action.venueId, action.date, time))
         );
-        toast.success(`${lastBlockAction.slots.length} slot(s) unblocked`);
+        toast.success(`${action.slots.length} slot(s) unblocked`);
       }
-      
+
       queryClient.invalidateQueries({ queryKey: ['slot-availability'] });
       queryClient.invalidateQueries({ queryKey: ['blocked-days'] });
       setLastBlockAction(null);
@@ -179,6 +172,12 @@ export default function SlotBlocksPage() {
       toast.error('Failed to undo block action');
       console.error('Undo error:', error);
     }
+  };
+
+  // Handle undo - permanent, available anytime
+  const handleUndo = async () => {
+    if (!lastBlockAction) return;
+    await performUndo(lastBlockAction);
   };
 
   // Clear last action manually
@@ -200,14 +199,16 @@ export default function SlotBlocksPage() {
       return edgeFunctionApi.blockMultipleSlots(slotsArray);
     },
     onSuccess: (_, { slots, reason }) => {
-      // Store action for permanent undo
-      setLastBlockAction({
+      const action: LastBlockAction = {
         type: 'slots',
         slots,
         date: format(selectedDate!, 'yyyy-MM-dd'),
         venueId: selectedVenueId,
         reason,
-      });
+      };
+
+      // Store action for permanent undo
+      setLastBlockAction(action);
       
       queryClient.invalidateQueries({ queryKey: ['slot-availability'] });
       queryClient.invalidateQueries({ queryKey: ['blocked-days'] });
@@ -216,7 +217,9 @@ export default function SlotBlocksPage() {
       toast.success(`${slots.length} slot(s) blocked`, {
         action: {
           label: 'Undo',
-          onClick: handleUndo,
+          // Use a captured action so "Undo" works even if clicked immediately
+          // before React finishes committing state.
+          onClick: () => performUndo(action),
         },
       });
       
@@ -234,14 +237,16 @@ export default function SlotBlocksPage() {
       return edgeFunctionApi.blockFullDay(selectedVenueId, dateStr, reason);
     },
     onSuccess: (_, { reason }) => {
-      // Store action for permanent undo
-      setLastBlockAction({
+      const action: LastBlockAction = {
         type: 'fullDay',
         slots: allTimeSlots,
         date: format(selectedDate!, 'yyyy-MM-dd'),
         venueId: selectedVenueId,
         reason,
-      });
+      };
+
+      // Store action for permanent undo
+      setLastBlockAction(action);
       
       queryClient.invalidateQueries({ queryKey: ['slot-availability'] });
       queryClient.invalidateQueries({ queryKey: ['blocked-days'] });
@@ -250,7 +255,7 @@ export default function SlotBlocksPage() {
       toast.success('Full day blocked', {
         action: {
           label: 'Undo',
-          onClick: handleUndo,
+          onClick: () => performUndo(action),
         },
       });
       
