@@ -24,10 +24,23 @@ export default function MyVenues() {
 
       if (error) throw error;
       
+      // Helper to format category/type for display
+      const formatLabel = (value: string): string => {
+        if (!value) return 'Venue';
+        // Handle kebab-case (e.g., "martial-arts" -> "Martial Arts")
+        return value
+          .split('-')
+          .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+          .join(' ');
+      };
+      
       return data.map(venue => ({
         id: venue.id,
         name: venue.name,
-        category: venue.category || 'Venue',
+        // Display category and type (sport) together if available
+        category: venue.sport 
+          ? `${formatLabel(venue.category || 'courts')} • ${formatLabel(venue.sport)}`
+          : formatLabel(venue.category || 'Venue'),
         image: venue.image_url || 'https://images.unsplash.com/photo-1497366216548-37526070297c?w=600&h=400&fit=crop',
         pricePerHour: venue.price_per_hour || 0,
         rating: 4.5, // Default rating since we don't have ratings yet
