@@ -37,6 +37,7 @@ export interface Venue {
   opening_time?: string;
   closing_time?: string;
   courts_count?: number;
+  min_booking_duration?: number;
   description?: string;
   amenities?: string[];
   created_at: string;

@@ -29,11 +29,18 @@ import { TimeSlotGrid } from '@/components/ui/TimeSlotGrid';
 import { BlockSlotDialog } from '@/components/ui/BlockSlotDialog';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 
-// Generate 30-minute time slots from opening to closing time
-function generate30MinSlots(openingTime: string = '07:00', closingTime: string = '21:00'): string[] {
+// Generate time slots based on venue's min_booking_duration (default 30 min)
+function generateTimeSlots(
+  openingTime: string = '07:00', 
+  closingTime: string = '21:00',
+  durationMinutes: number = 30
+): string[] {
   const slots: string[] = [];
   const [openHour, openMin] = openingTime.split(':').map(Number);
   const [closeHour, closeMin] = closingTime.split(':').map(Number);
+  
+  // Ensure minimum 30 minute slots
+  const slotDuration = Math.max(durationMinutes, 30);
   
   let currentHour = openHour;
   let currentMin = openMin || 0;
@@ -42,9 +49,9 @@ function generate30MinSlots(openingTime: string = '07:00', closingTime: string =
   
   while (currentHour * 60 + currentMin < closeTimeMinutes) {
     slots.push(`${currentHour.toString().padStart(2, '0')}:${currentMin.toString().padStart(2, '0')}`);
-    currentMin += 30;
-    if (currentMin >= 60) {
-      currentMin = 0;
+    currentMin += slotDuration;
+    while (currentMin >= 60) {
+      currentMin -= 60;
       currentHour++;
     }
   }
@@ -127,13 +134,15 @@ export default function SlotBlocksPage() {
     enabled: !!selectedVenueId && !!selectedDate,
   });
 
-  // Generate time slots based on venue hours or defaults
+  // Generate time slots based on venue hours and min_booking_duration
+  const slotDuration = selectedVenue?.min_booking_duration || 30;
   const allTimeSlots = useMemo(() => {
-    return generate30MinSlots(
+    return generateTimeSlots(
       selectedVenue?.opening_time || '07:00',
-      selectedVenue?.closing_time || '21:00'
+      selectedVenue?.closing_time || '21:00',
+      slotDuration
     );
-  }, [selectedVenue?.opening_time, selectedVenue?.closing_time]);
+  }, [selectedVenue?.opening_time, selectedVenue?.closing_time, slotDuration]);
 
   // Merge slot availability with generated slots - use only SlotAvailability fields
   const timeSlots: SlotAvailability[] = useMemo(() => {
@@ -333,7 +342,8 @@ export default function SlotBlocksPage() {
   // Count blocked and available slots for the selected date
   const blockedCount = timeSlots.filter(s => s.is_blocked).length;
   const availableCount = timeSlots.length - blockedCount;
-  const maxCourts = selectedVenue?.courts_count || 3;
+  // Use venue's actual courts_count (default 1 if not set)
+  const maxCourts = selectedVenue?.courts_count || 1;
 
   return (
     <AdminLayout title="Slot Blocks">
