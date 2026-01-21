@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { edgeFunctionApi, Venue } from '@/lib/edgeFunctionApi';
 import { directApi } from '@/lib/directApi';
@@ -51,6 +52,7 @@ const defaultVenue: Partial<Venue> = {
 };
 
 export default function VenuesPage() {
+  const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [page, setPage] = useState(1);
@@ -168,7 +170,7 @@ export default function VenuesPage() {
           <Button 
             size="sm" 
             className="rounded-full px-4"
-            onClick={() => setEditDialog({ open: true, venue: { ...defaultVenue }, isNew: true })}
+            onClick={() => navigate('/add-venue')}
           >
             <Plus className="h-4 w-4 mr-1" />
             Add New
