@@ -414,6 +414,8 @@ export default function EditVenue() {
         description: formData.description,
         courts_count: formData.category === "courts" ? formData.courtsCount : 1,
         is_active: formData.isActive,
+        day_schedules: openingHours,
+        min_booking_duration: formData.minDuration,
       };
 
       await edgeFunctionApi.updateVenue(venueId!, venueUpdates);
