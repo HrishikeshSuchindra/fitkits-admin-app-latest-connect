@@ -63,6 +63,13 @@ export interface SlotBlock {
   created_by: string;
 }
 
+export interface SlotAvailability {
+  time: string;
+  booked_courts: number;
+  is_blocked: boolean;
+  block_reason?: string;
+}
+
 export interface VenuesResponse {
   venues: Venue[];
   total: number;
@@ -82,6 +89,18 @@ export interface SlotBlocksResponse {
   total: number;
   page: number;
   limit: number;
+}
+
+export interface SlotAvailabilityResponse {
+  slots: SlotAvailability[];
+}
+
+export interface BlockedDaysResponse {
+  dates: string[];
+}
+
+export interface BookedDaysResponse {
+  dates: string[];
 }
 
 // Edge Function API using supabase.functions.invoke()
@@ -362,6 +381,142 @@ export const edgeFunctionApi = {
 
     if (error) {
       console.error('Unblock slot error:', error);
+      throw new Error(error.message);
+    }
+
+    return { success: true };
+  },
+
+  // ==================== SLOT AVAILABILITY (for Calendar) ====================
+  async getSlotAvailability(params: {
+    venue_id: string;
+    date: string;
+  }): Promise<SlotAvailabilityResponse> {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.user) throw new Error('Not authenticated');
+
+    const { data, error } = await supabase.functions.invoke('admin-slot-blocks', {
+      method: 'GET',
+      body: {
+        action: 'slot_availability',
+        venue_id: params.venue_id,
+        date: params.date,
+      },
+    });
+
+    if (error) {
+      console.error('Get slot availability error:', error);
+      throw new Error(error.message);
+    }
+
+    return { slots: data?.slots || [] };
+  },
+
+  async getBlockedDaysInMonth(params: {
+    venue_id: string;
+    year: number;
+    month: number;
+  }): Promise<BlockedDaysResponse> {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.user) throw new Error('Not authenticated');
+
+    // Calculate date range for the month
+    const startDate = `${params.year}-${String(params.month).padStart(2, '0')}-01`;
+    const lastDay = new Date(params.year, params.month, 0).getDate();
+    const endDate = `${params.year}-${String(params.month).padStart(2, '0')}-${lastDay}`;
+
+    const { data, error } = await supabase.functions.invoke('admin-slot-blocks', {
+      method: 'GET',
+      body: {
+        venue_id: params.venue_id,
+        date_from: startDate,
+        date_to: endDate,
+      },
+    });
+
+    if (error) {
+      console.error('Get blocked days error:', error);
+      throw new Error(error.message);
+    }
+
+    // Extract unique dates from blocks
+    const blocks = data?.blocks || [];
+    const uniqueDates = [...new Set(blocks.map((b: any) => b.slot_date))] as string[];
+    
+    return { dates: uniqueDates };
+  },
+
+  async getBookedDaysInMonth(params: {
+    venue_id: string;
+    year: number;
+    month: number;
+  }): Promise<BookedDaysResponse> {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.user) throw new Error('Not authenticated');
+
+    // Calculate date range for the month
+    const startDate = `${params.year}-${String(params.month).padStart(2, '0')}-01`;
+    const lastDay = new Date(params.year, params.month, 0).getDate();
+    const endDate = `${params.year}-${String(params.month).padStart(2, '0')}-${lastDay}`;
+
+    const { data, error } = await supabase.functions.invoke('admin-bookings', {
+      method: 'GET',
+      body: {
+        venue_id: params.venue_id,
+        date_from: startDate,
+        date_to: endDate,
+      },
+    });
+
+    if (error) {
+      console.error('Get booked days error:', error);
+      throw new Error(error.message);
+    }
+
+    // Extract unique booking dates
+    const bookings = data?.bookings || [];
+    const uniqueDates = [...new Set(bookings.map((b: any) => b.booking_date))] as string[];
+    
+    return { dates: uniqueDates };
+  },
+
+  async blockFullDay(venueId: string, date: string, reason?: string): Promise<{ success: boolean; blocks_created: number }> {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.user) throw new Error('Not authenticated');
+
+    const { data, error } = await supabase.functions.invoke('admin-slot-blocks', {
+      method: 'POST',
+      body: {
+        venue_id: venueId,
+        slot_date: date,
+        block_full_day: true,
+        reason: reason || 'Blocked by admin',
+      },
+    });
+
+    if (error) {
+      console.error('Block full day error:', error);
+      throw new Error(error.message);
+    }
+
+    return { success: true, blocks_created: data?.blocks_created || 0 };
+  },
+
+  async unblockFullDay(venueId: string, date: string): Promise<{ success: boolean }> {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.user) throw new Error('Not authenticated');
+
+    const { data, error } = await supabase.functions.invoke('admin-slot-blocks', {
+      method: 'DELETE',
+      body: {
+        venue_id: venueId,
+        slot_date: date,
+        unblock_full_day: true,
+      },
+    });
+
+    if (error) {
+      console.error('Unblock full day error:', error);
       throw new Error(error.message);
     }
 

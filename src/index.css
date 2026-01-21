@@ -224,4 +224,77 @@
   .safe-top {
     padding-top: max(0.75rem, env(safe-area-inset-top));
   }
+
+  /* Calendar Day States */
+  .calendar-day {
+    @apply w-10 h-10 rounded-full flex items-center justify-center text-sm font-medium cursor-pointer transition-all duration-200 relative;
+  }
+
+  .calendar-day:hover {
+    @apply bg-muted;
+  }
+
+  .calendar-day-today {
+    @apply ring-2 ring-primary ring-offset-2 ring-offset-background;
+  }
+
+  .calendar-day-selected {
+    @apply bg-primary text-primary-foreground hover:bg-primary;
+  }
+
+  .calendar-day-outside {
+    @apply text-muted-foreground/50;
+  }
+
+  .calendar-day-blocked::after {
+    content: '';
+    @apply absolute bottom-0.5 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-destructive;
+  }
+
+  .calendar-day-booked::before {
+    content: '';
+    @apply absolute bottom-0.5 right-2.5 w-1.5 h-1.5 rounded-full bg-warning;
+  }
+
+  /* Slot Grid Buttons */
+  .slot-button {
+    @apply relative p-3 rounded-xl border transition-all duration-200 flex flex-col items-center justify-center gap-1 cursor-pointer;
+  }
+
+  .slot-available {
+    @apply bg-card border-border hover:border-primary hover:bg-primary/5;
+  }
+
+  .slot-partial {
+    @apply bg-warning/10 border-warning/30 hover:border-warning/50;
+  }
+
+  .slot-full {
+    @apply bg-warning/20 border-warning/50;
+  }
+
+  .slot-blocked {
+    @apply bg-destructive/10 border-destructive/30 cursor-not-allowed;
+  }
+
+  .slot-selected {
+    @apply ring-2 ring-primary ring-offset-1 ring-offset-background;
+  }
+
+  /* Court Indicator Badge */
+  .court-badge {
+    @apply text-[10px] px-1.5 py-0.5 rounded-full font-medium;
+  }
+
+  .court-badge-available {
+    @apply bg-success/20 text-success;
+  }
+
+  .court-badge-partial {
+    @apply bg-warning/20 text-warning;
+  }
+
+  .court-badge-full {
+    @apply bg-destructive/20 text-destructive;
+  }
 }
