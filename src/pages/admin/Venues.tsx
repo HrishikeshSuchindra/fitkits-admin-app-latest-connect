@@ -99,6 +99,7 @@ export default function VenuesPage() {
 
   const deleteMutation = useMutation({
     mutationFn: async (venueId: string) => {
+      // Note: Backend currently does soft-delete (deactivation), not hard delete
       const result = await edgeFunctionApi.deleteVenue(venueId);
       return result;
     },
