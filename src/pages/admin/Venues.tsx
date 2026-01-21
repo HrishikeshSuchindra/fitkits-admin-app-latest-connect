@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { edgeFunctionApi, Venue } from '@/lib/edgeFunctionApi';
+import { directApi } from '@/lib/directApi';
 import { AdminLayout } from '@/components/layout/AdminLayout';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -99,15 +100,14 @@ export default function VenuesPage() {
 
   const deleteMutation = useMutation({
     mutationFn: async (venueId: string) => {
-      // Note: Backend currently does soft-delete (deactivation), not hard delete
-      const result = await edgeFunctionApi.deleteVenue(venueId);
+      // Hard delete - permanently removes from database
+      const result = await directApi.deleteVenue(venueId);
       return result;
     },
     onSuccess: () => {
-      // Force immediate refetch to update the UI
       queryClient.invalidateQueries({ queryKey: ['venues'] });
       queryClient.refetchQueries({ queryKey: ['venues'] });
-      toast.success('Venue deleted successfully');
+      toast.success('Venue permanently deleted');
       setDeleteDialog(null);
     },
     onError: (error: Error) => {
