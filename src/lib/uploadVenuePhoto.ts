@@ -1,5 +1,7 @@
 import { supabase } from './supabase';
 
+const BUCKET_NAME = 'venue-images';
+
 export async function uploadVenuePhoto(
   file: File,
   venueSlug: string,
@@ -9,7 +11,7 @@ export async function uploadVenuePhoto(
   const fileName = `${venueSlug}/${photoIndex}-${Date.now()}.${fileExt}`;
 
   const { error } = await supabase.storage
-    .from('venue-photos')
+    .from(BUCKET_NAME)
     .upload(fileName, file, {
       cacheControl: '3600',
       upsert: false,
@@ -21,7 +23,7 @@ export async function uploadVenuePhoto(
   }
 
   const { data } = supabase.storage
-    .from('venue-photos')
+    .from(BUCKET_NAME)
     .getPublicUrl(fileName);
 
   return data.publicUrl;
