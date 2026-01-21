@@ -355,7 +355,7 @@ export const edgeFunctionApi = {
 
     const { data, error } = await supabase.functions.invoke('admin-slot-blocks', {
       method: 'POST',
-      body: { slots },
+      body: { action: 'block_multiple', slots },
     });
 
     if (error) {
