@@ -548,76 +548,111 @@ export const edgeFunctionApi = {
   // ==================== ANALYTICS (direct query for now) ====================
   async getAnalytics(type: 'overview' | 'revenue' | 'bookings' | 'users', period: string = '30d') {
     // For analytics, we'll query directly since there's no Edge Function for it
-    // This is a simplified version - in production, create an analytics Edge Function
     const { data: { session } } = await supabase.auth.getSession();
     if (!session?.user) throw new Error('Not authenticated');
 
-    // Get user's venues first
-    const { data: venues } = await supabase
+    // Calculate date range
+    const days = parseInt(period) || 30;
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - days);
+    const startDateStr = startDate.toISOString().split('T')[0];
+
+    // Previous period for growth comparison
+    const prevStartDate = new Date(startDate);
+    prevStartDate.setDate(prevStartDate.getDate() - days);
+    const prevStartDateStr = prevStartDate.toISOString().split('T')[0];
+
+    // Get all active venues
+    const { data: venues, count: activeVenuesCount } = await supabase
       .from('venues')
-      .select('id')
-      .eq('owner_id', session.user.id);
+      .select('id', { count: 'exact' })
+      .eq('is_active', true);
 
     const venueIds = venues?.map(v => v.id) || [];
 
     if (type === 'overview') {
-      // Get bookings count for owned venues
-      const { count: bookingsCount } = await supabase
+      // Get current period bookings (not cancelled) with user and price info
+      const { data: currentBookings } = await supabase
         .from('bookings')
-        .select('*', { count: 'exact', head: true })
-        .in('venue_id', venueIds);
+        .select('id, user_id, price, total_amount, slot_date, booking_date')
+        .neq('status', 'cancelled')
+        .gte('slot_date', startDateStr);
 
-      // Get revenue
-      const { data: revenueData } = await supabase
+      // Get previous period bookings for growth comparison
+      const { data: prevBookings } = await supabase
         .from('bookings')
-        .select('total_amount')
-        .in('venue_id', venueIds)
-        .eq('status', 'confirmed');
+        .select('id, user_id, price, total_amount')
+        .neq('status', 'cancelled')
+        .gte('slot_date', prevStartDateStr)
+        .lt('slot_date', startDateStr);
 
-      const totalRevenue = revenueData?.reduce((sum, b) => sum + (b.total_amount || 0), 0) || 0;
+      // Calculate current period stats
+      const currentRevenue = currentBookings?.reduce((sum, b) => sum + (b.price ?? b.total_amount ?? 0), 0) || 0;
+      const currentBookingsCount = currentBookings?.length || 0;
+      const currentUniqueUsers = new Set(currentBookings?.map(b => b.user_id).filter(Boolean)).size;
+
+      // Calculate previous period stats
+      const prevRevenue = prevBookings?.reduce((sum, b) => sum + (b.price ?? b.total_amount ?? 0), 0) || 0;
+      const prevBookingsCount = prevBookings?.length || 0;
+      const prevUniqueUsers = new Set(prevBookings?.map(b => b.user_id).filter(Boolean)).size;
+
+      // Calculate growth percentages
+      const revenueGrowth = prevRevenue > 0 ? ((currentRevenue - prevRevenue) / prevRevenue) * 100 : 0;
+      const bookingGrowth = prevBookingsCount > 0 ? ((currentBookingsCount - prevBookingsCount) / prevBookingsCount) * 100 : 0;
+      const userGrowth = prevUniqueUsers > 0 ? ((currentUniqueUsers - prevUniqueUsers) / prevUniqueUsers) * 100 : 0;
 
       return {
         overview: {
-          totalRevenue,
-          totalBookings: bookingsCount || 0,
-          totalUsers: 0, // Not relevant for venue owner
-          activeVenues: venueIds.length,
-          revenueGrowth: 0,
-          bookingGrowth: 0,
-          userGrowth: 0,
+          totalRevenue: currentRevenue,
+          totalBookings: currentBookingsCount,
+          totalUsers: currentUniqueUsers,
+          activeVenues: activeVenuesCount || 0,
+          revenueGrowth: Math.round(revenueGrowth * 10) / 10,
+          bookingGrowth: Math.round(bookingGrowth * 10) / 10,
+          userGrowth: Math.round(userGrowth * 10) / 10,
         }
       };
     }
 
     if (type === 'revenue') {
+      // Get daily revenue for the period (non-cancelled bookings)
       const { data } = await supabase
         .from('bookings')
-        .select('total_amount, booking_date')
-        .in('venue_id', venueIds)
-        .eq('status', 'confirmed')
-        .order('booking_date', { ascending: true })
-        .limit(30);
+        .select('price, total_amount, slot_date, booking_date')
+        .neq('status', 'cancelled')
+        .gte('slot_date', startDateStr)
+        .order('slot_date', { ascending: true });
+
+      // Group by date and sum revenue
+      const grouped = data?.reduce((acc, b) => {
+        const date = b.slot_date || b.booking_date;
+        if (date) {
+          const amount = b.price ?? b.total_amount ?? 0;
+          acc[date] = (acc[date] || 0) + amount;
+        }
+        return acc;
+      }, {} as Record<string, number>) || {};
 
       return {
-        revenue: data?.map(b => ({
-          date: b.booking_date,
-          amount: b.total_amount || 0,
-        })) || []
+        revenue: Object.entries(grouped).map(([date, amount]) => ({ date, amount }))
       };
     }
 
     if (type === 'bookings') {
+      // Get daily booking counts for the period (non-cancelled)
       const { data } = await supabase
         .from('bookings')
-        .select('booking_date')
-        .in('venue_id', venueIds)
-        .order('booking_date', { ascending: true })
-        .limit(30);
+        .select('slot_date, booking_date')
+        .neq('status', 'cancelled')
+        .gte('slot_date', startDateStr)
+        .order('slot_date', { ascending: true });
 
       // Group by date
       const grouped = data?.reduce((acc, b) => {
-        const date = b.booking_date;
-        acc[date] = (acc[date] || 0) + 1;
+        const date = b.slot_date || b.booking_date;
+        if (date) {
+          acc[date] = (acc[date] || 0) + 1;
+        }
         return acc;
       }, {} as Record<string, number>) || {};
 
