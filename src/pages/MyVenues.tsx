@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Building2, CalendarCheck, Plus } from "lucide-react";
 import { MobileHeader } from "@/components/ui/MobileHeader";
@@ -6,50 +5,57 @@ import { KPICard } from "@/components/ui/KPICard";
 import { VenueCard } from "@/components/ui/VenueCard";
 import { BottomNav } from "@/components/ui/BottomNav";
 import { Button } from "@/components/ui/button";
-
-const mockVenues = [
-  {
-    id: "1",
-    name: "Creative Studio Downtown",
-    category: "Photography Studio",
-    image: "https://images.unsplash.com/photo-1497366216548-37526070297c?w=600&h=400&fit=crop",
-    pricePerHour: 85,
-    rating: 4.8,
-    location: "Downtown, NYC",
-    isActive: true,
-  },
-  {
-    id: "2",
-    name: "Industrial Loft Space",
-    category: "Event Space",
-    image: "https://images.unsplash.com/photo-1497366754035-f200968a6e72?w=600&h=400&fit=crop",
-    pricePerHour: 120,
-    rating: 4.6,
-    location: "Brooklyn, NYC",
-    isActive: true,
-  },
-  {
-    id: "3",
-    name: "Rooftop Garden Venue",
-    category: "Outdoor Space",
-    image: "https://images.unsplash.com/photo-1519167758481-83f550bb49b3?w=600&h=400&fit=crop",
-    pricePerHour: 200,
-    rating: 4.9,
-    location: "Manhattan, NYC",
-    isActive: false,
-  },
-];
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/lib/supabase";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export default function MyVenues() {
   const navigate = useNavigate();
-  const [venues, setVenues] = useState(mockVenues);
+
+  // Fetch only active venues from the database
+  const { data: venues = [], isLoading } = useQuery({
+    queryKey: ['user-venues'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('venues')
+        .select('*')
+        .eq('is_active', true)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      
+      return data.map(venue => ({
+        id: venue.id,
+        name: venue.name,
+        category: venue.category || 'Venue',
+        image: venue.image_url || 'https://images.unsplash.com/photo-1497366216548-37526070297c?w=600&h=400&fit=crop',
+        pricePerHour: venue.price_per_hour || 0,
+        rating: 4.5, // Default rating since we don't have ratings yet
+        location: venue.city || venue.location || '',
+        isActive: venue.is_active,
+      }));
+    },
+  });
+
+  // Fetch today's bookings count
+  const { data: todayBookingsCount = 0 } = useQuery({
+    queryKey: ['today-bookings-count'],
+    queryFn: async () => {
+      const today = new Date().toISOString().split('T')[0];
+      const { count, error } = await supabase
+        .from('bookings')
+        .select('*', { count: 'exact', head: true })
+        .eq('slot_date', today)
+        .eq('status', 'confirmed');
+
+      if (error) throw error;
+      return count || 0;
+    },
+  });
 
   const handleToggleActive = (id: string, active: boolean) => {
-    setVenues((prev) =>
-      prev.map((venue) =>
-        venue.id === id ? { ...venue, isActive: active } : venue
-      )
-    );
+    console.log("Toggle venue:", id, active);
+    // This would need to update the database, but for user view we just show active venues
   };
 
   const handleEdit = (id: string) => {
@@ -74,7 +80,7 @@ export default function MyVenues() {
           />
           <KPICard
             label="Today's Bookings"
-            value="8"
+            value={todayBookingsCount}
             icon={CalendarCheck}
             iconBgColor="bg-success-light"
             iconColor="text-success"
@@ -84,7 +90,7 @@ export default function MyVenues() {
         {/* My Venues Section */}
         <div>
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-foreground">My Venues</h2>
+            <h2 className="text-lg font-semibold text-foreground">Available Venues</h2>
             <Button
               size="sm"
               onClick={() => navigate("/add-venue")}
@@ -96,14 +102,30 @@ export default function MyVenues() {
           </div>
 
           <div className="space-y-4">
-            {venues.map((venue) => (
-              <VenueCard
-                key={venue.id}
-                {...venue}
-                onToggleActive={handleToggleActive}
-                onEdit={handleEdit}
-              />
-            ))}
+            {isLoading ? (
+              Array.from({ length: 3 }).map((_, i) => (
+                <div key={i} className="rounded-xl overflow-hidden border">
+                  <Skeleton className="h-40 w-full" />
+                  <div className="p-4 space-y-2">
+                    <Skeleton className="h-5 w-3/4" />
+                    <Skeleton className="h-4 w-1/2" />
+                  </div>
+                </div>
+              ))
+            ) : venues.length > 0 ? (
+              venues.map((venue) => (
+                <VenueCard
+                  key={venue.id}
+                  {...venue}
+                  onToggleActive={handleToggleActive}
+                  onEdit={handleEdit}
+                />
+              ))
+            ) : (
+              <div className="text-center py-12 text-muted-foreground">
+                No venues available
+              </div>
+            )}
           </div>
         </div>
       </div>

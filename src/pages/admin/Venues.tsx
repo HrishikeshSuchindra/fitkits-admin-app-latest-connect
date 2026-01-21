@@ -98,14 +98,20 @@ export default function VenuesPage() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (venueId: string) => edgeFunctionApi.deleteVenue(venueId),
+    mutationFn: async (venueId: string) => {
+      const result = await edgeFunctionApi.deleteVenue(venueId);
+      return result;
+    },
     onSuccess: () => {
+      // Force immediate refetch to update the UI
       queryClient.invalidateQueries({ queryKey: ['venues'] });
-      toast.success('Venue deleted');
+      queryClient.refetchQueries({ queryKey: ['venues'] });
+      toast.success('Venue deleted successfully');
       setDeleteDialog(null);
     },
     onError: (error: Error) => {
-      toast.error(error.message);
+      console.error('Delete venue error:', error);
+      toast.error(`Failed to delete venue: ${error.message}`);
     },
   });
 
