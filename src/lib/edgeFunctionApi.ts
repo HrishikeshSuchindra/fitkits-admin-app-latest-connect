@@ -32,6 +32,7 @@ export interface Venue {
   address: string;
   price_per_hour: number;
   image_url: string | null;
+  gallery_urls?: string[];
   is_active: boolean;
   owner_id: string;
   opening_time?: string;
@@ -202,11 +203,13 @@ export const edgeFunctionApi = {
         city: venue.location,
         price_per_hour: venue.price_per_hour,
         image_url: venue.image_url,
+        gallery_urls: venue.gallery_urls || [],
         is_active: venue.is_active ?? true,
         amenities: venue.amenities || [],
         description: venue.description || '',
         opening_hours: venue.opening_hours || null,
         min_booking_duration: venue.min_booking_duration || 60,
+        courts_count: venue.courts_count || 1,
       },
     });
 
@@ -232,11 +235,13 @@ export const edgeFunctionApi = {
     if (updates.location !== undefined) updateData.city = updates.location;
     if (updates.price_per_hour !== undefined) updateData.price_per_hour = updates.price_per_hour;
     if (updates.image_url !== undefined) updateData.image_url = updates.image_url;
+    if (updates.gallery_urls !== undefined) updateData.gallery_urls = updates.gallery_urls;
     if (updates.is_active !== undefined) updateData.is_active = updates.is_active;
     if (updates.amenities !== undefined) updateData.amenities = updates.amenities;
     if (updates.opening_time !== undefined) updateData.opening_time = updates.opening_time;
     if (updates.closing_time !== undefined) updateData.closing_time = updates.closing_time;
     if (updates.description !== undefined) updateData.description = updates.description;
+    if (updates.courts_count !== undefined) updateData.courts_count = updates.courts_count;
 
     const { data, error } = await supabase.functions.invoke('admin-venues', {
       method: 'PATCH',

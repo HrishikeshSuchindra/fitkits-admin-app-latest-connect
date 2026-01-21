@@ -343,6 +343,7 @@ export default function AddVenue() {
         location: formData.city,
         price_per_hour: parseFloat(formData.pricePerHour),
         image_url: coverPhotoUrl || null,
+        gallery_urls: photoUrls,
         amenities: allAmenities,
         description: formData.description,
         opening_hours: openingHours,
