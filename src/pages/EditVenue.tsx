@@ -126,6 +126,7 @@ export default function EditVenue() {
     name: "",
     category: "", // Main category: courts, studio, recovery
     type: "", // Sub-type: padel, tennis, yoga, etc.
+    courtsCount: 1, // Number of courts (only for courts category)
     description: "",
     streetAddress: "",
     city: "",
@@ -167,6 +168,7 @@ export default function EditVenue() {
         name: venueData.name || "",
         category: venueData.category || "courts",
         type: venueData.sport || "",
+        courtsCount: venueData.courts_count || 1,
         description: venueData.description || "",
         streetAddress: venueData.address || "",
         city: venueData.location || "",
@@ -214,12 +216,21 @@ export default function EditVenue() {
     }));
   };
 
+  // Helper to format amenity text properly (Title Case)
+  const formatAmenityText = (text: string): string => {
+    return text
+      .split(' ')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+      .join(' ');
+  };
+
   const handleAddCustomAmenity = () => {
     const trimmed = formData.newCustomAmenity.trim();
-    if (trimmed && !formData.customAmenities.includes(trimmed)) {
+    const formatted = formatAmenityText(trimmed);
+    if (formatted && !formData.customAmenities.includes(formatted)) {
       setFormData((prev) => ({
         ...prev,
-        customAmenities: [...prev.customAmenities, trimmed],
+        customAmenities: [...prev.customAmenities, formatted],
         newCustomAmenity: "",
       }));
     }
@@ -400,6 +411,7 @@ export default function EditVenue() {
         image_url: coverPhotoUrl || null,
         amenities: allAmenities,
         description: formData.description,
+        courts_count: formData.category === "courts" ? formData.courtsCount : 1,
         is_active: formData.isActive,
       };
 
@@ -492,6 +504,26 @@ export default function EditVenue() {
                 </SelectContent>
               </Select>
             </div>
+
+            {/* Number of Courts - only show for courts category */}
+            {formData.category === "courts" && (
+              <div>
+                <Label htmlFor="courtsCount">Number of Courts *</Label>
+                <Input
+                  id="courtsCount"
+                  type="number"
+                  min="1"
+                  max="20"
+                  placeholder="e.g., 3"
+                  value={formData.courtsCount}
+                  onChange={(e) => setFormData({ ...formData, courtsCount: parseInt(e.target.value) || 1 })}
+                  className="mt-1.5"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  How many courts are available for booking at this venue?
+                </p>
+              </div>
+            )}
 
             <div>
               <Label>Type *</Label>
