@@ -265,7 +265,7 @@ export default function VenuesPage() {
                         variant="outline"
                         size="sm"
                         className="rounded-lg"
-                        onClick={() => setEditDialog({ open: true, venue: { ...venue }, isNew: false })}
+                        onClick={() => navigate(`/edit-venue/${venue.id}`)}
                       >
                         <Pencil className="h-3 w-3 mr-1" />
                         Edit

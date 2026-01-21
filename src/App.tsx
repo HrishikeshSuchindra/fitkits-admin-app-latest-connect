@@ -10,6 +10,7 @@ import AdminDashboard from "./pages/admin/Dashboard";
 import BookingsPage from "./pages/admin/Bookings";
 import VenuesPage from "./pages/admin/Venues";
 import AddVenue from "./pages/AddVenue";
+import EditVenue from "./pages/EditVenue";
 import SlotBlocksPage from "./pages/admin/SlotBlocks";
 import EventsPage from "./pages/admin/Events";
 import AuditLogPage from "./pages/admin/AuditLog";
@@ -29,6 +30,7 @@ function AppRoutes() {
         <Route path="/bookings" element={<ProtectedRoute><BookingsPage /></ProtectedRoute>} />
         <Route path="/venues" element={<ProtectedRoute><VenuesPage /></ProtectedRoute>} />
         <Route path="/add-venue" element={<ProtectedRoute><AddVenue /></ProtectedRoute>} />
+        <Route path="/edit-venue/:venueId" element={<ProtectedRoute><EditVenue /></ProtectedRoute>} />
         <Route path="/slot-blocks" element={<ProtectedRoute><SlotBlocksPage /></ProtectedRoute>} />
         <Route path="/events" element={<ProtectedRoute><EventsPage /></ProtectedRoute>} />
         <Route path="/audit-log" element={<ProtectedRoute><AuditLogPage /></ProtectedRoute>} />
@@ -44,6 +46,7 @@ function AppRoutes() {
       <Route path="/bookings" element={<ProtectedRoute><BookingsPage /></ProtectedRoute>} />
       <Route path="/venues" element={<ProtectedRoute><VenuesPage /></ProtectedRoute>} />
       <Route path="/add-venue" element={<ProtectedRoute><AddVenue /></ProtectedRoute>} />
+      <Route path="/edit-venue/:venueId" element={<ProtectedRoute><EditVenue /></ProtectedRoute>} />
       <Route path="/slot-blocks" element={<ProtectedRoute><SlotBlocksPage /></ProtectedRoute>} />
       <Route path="/events" element={<ProtectedRoute><EventsPage /></ProtectedRoute>} />
       <Route path="/audit-log" element={<ProtectedRoute><AuditLogPage /></ProtectedRoute>} />
