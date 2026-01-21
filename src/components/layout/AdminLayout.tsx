@@ -9,13 +9,13 @@ import {
   FileText, 
   LogOut,
   Menu,
-  Bell,
   X
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useState } from 'react';
+import { NotificationDropdown } from '@/components/ui/NotificationDropdown';
 
 const navItems = [
   { path: '/', label: 'Dashboard', icon: LayoutDashboard },
@@ -56,9 +56,7 @@ export function AdminLayout({ children, title }: AdminLayoutProps) {
             <Menu className="h-5 w-5" />
           </Button>
           <h1 className="font-semibold text-foreground">{title || currentPage?.label || 'Admin'}</h1>
-          <Button variant="ghost" size="icon" className="h-9 w-9">
-            <Bell className="h-5 w-5" />
-          </Button>
+          <NotificationDropdown />
         </div>
       </header>
 
@@ -122,20 +120,22 @@ export function AdminLayout({ children, title }: AdminLayoutProps) {
             <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-muted/50">
               <div className="w-9 h-9 rounded-full bg-primary-light flex items-center justify-center">
                 <span className="text-primary text-sm font-medium">
-                  {user?.email?.[0].toUpperCase()}
+                  {user?.email?.[0]?.toUpperCase() || 'A'}
                 </span>
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-foreground truncate">Admin</p>
-                <p className="text-xs text-muted-foreground truncate">{user?.email}</p>
+                <p className="text-sm font-medium text-foreground truncate">
+                  {user?.email || 'Admin'}
+                </p>
+                <p className="text-xs text-muted-foreground">Administrator</p>
               </div>
             </div>
-            <Button 
-              variant="ghost" 
-              className="w-full justify-start text-destructive hover:text-destructive hover:bg-destructive-light"
+            <Button
+              variant="ghost"
+              className="w-full justify-start gap-3 text-destructive hover:text-destructive hover:bg-destructive/10"
               onClick={handleSignOut}
             >
-              <LogOut className="h-4 w-4 mr-2" />
+              <LogOut className="h-5 w-5" />
               Sign Out
             </Button>
           </div>
@@ -143,13 +143,13 @@ export function AdminLayout({ children, title }: AdminLayoutProps) {
       </aside>
 
       {/* Main Content */}
-      <main className="mobile-padding py-4 pb-20">
+      <main className="flex-1 mobile-padding py-4 pb-24 safe-bottom">
         {children}
       </main>
 
       {/* Bottom Navigation */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-card border-t border-border safe-bottom z-40">
-        <div className="max-w-md mx-auto flex items-center justify-around h-16 px-2">
+      <nav className="fixed bottom-0 left-0 right-0 bg-card border-t border-border z-40 safe-bottom">
+        <div className="flex items-center justify-around h-16 max-w-lg mx-auto">
           {navItems.slice(0, 5).map((item) => {
             const isActive = location.pathname === item.path;
             return (
@@ -157,14 +157,16 @@ export function AdminLayout({ children, title }: AdminLayoutProps) {
                 key={item.path}
                 to={item.path}
                 className={cn(
-                  "flex flex-col items-center gap-1 px-3 py-2 rounded-xl transition-colors min-w-[60px]",
+                  "flex flex-col items-center justify-center gap-1 py-2 px-3 min-w-0 transition-colors",
                   isActive 
                     ? "text-primary" 
                     : "text-muted-foreground"
                 )}
               >
-                <item.icon className={cn("h-5 w-5", isActive && "text-primary")} />
-                <span className="text-[10px] font-medium">{item.label}</span>
+                <item.icon className={cn("h-5 w-5", isActive && "scale-110")} />
+                <span className="text-[10px] font-medium truncate max-w-[60px]">
+                  {item.label}
+                </span>
               </Link>
             );
           })}

@@ -23,7 +23,7 @@ import {
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
   XCircle, 
-  RefreshCw,
+  Phone,
   Loader2,
   Clock,
   MapPin,
@@ -86,13 +86,18 @@ function getVenueName(booking: Booking): string {
   return booking.venue_name || booking.venue?.name || 'Unknown Venue';
 }
 
+// Helper to get user phone number
+function getUserPhone(booking: Booking): string | null {
+  return booking.user_profile?.phone_number || booking.user?.phone || null;
+}
+
 export default function BookingsPage() {
   const [activeTab, setActiveTab] = useState<'live' | 'previous'>('live');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [venueFilter, setVenueFilter] = useState<string>('all');
   const [page, setPage] = useState(1);
   const [actionDialog, setActionDialog] = useState<{
-    type: 'cancel' | 'refund' | null;
+    type: 'cancel' | null;
     booking: Booking | null;
   }>({ type: null, booking: null });
   const [actionReason, setActionReason] = useState('');
@@ -127,17 +132,12 @@ export default function BookingsPage() {
     const channel = supabase
       .channel('admin-booking-updates')
       .on('postgres_changes', {
-        event: 'UPDATE',
+        event: '*',
         schema: 'public',
         table: 'bookings',
-      }, (payload) => {
-        const newStatus = payload.new?.status;
-        if (newStatus === 'cancelled') {
-          toast.info('A booking was cancelled');
-        }
+      }, () => {
+        // Refresh bookings on any change
         queryClient.invalidateQueries({ queryKey: ['bookings'] });
-        queryClient.invalidateQueries({ queryKey: ['slot-availability'] });
-        queryClient.invalidateQueries({ queryKey: ['booked-days'] });
       })
       .subscribe();
 
@@ -145,6 +145,11 @@ export default function BookingsPage() {
       supabase.removeChannel(channel);
     };
   }, [queryClient]);
+
+  const closeDialog = () => {
+    setActionDialog({ type: null, booking: null });
+    setActionReason('');
+  };
 
   const cancelMutation = useMutation({
     mutationFn: ({ bookingId, reason }: { bookingId: string; reason: string }) =>
@@ -162,52 +167,24 @@ export default function BookingsPage() {
     },
   });
 
-  const refundMutation = useMutation({
-    mutationFn: ({ bookingId, reason }: { bookingId: string; reason: string }) =>
-      edgeFunctionApi.refundBooking(bookingId, reason),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['bookings'] });
-      queryClient.invalidateQueries({ queryKey: ['slot-availability'] });
-      queryClient.invalidateQueries({ queryKey: ['booked-days'] });
-      toast.success('Refund processed');
-      closeDialog();
-    },
-    onError: (error: Error) => {
-      toast.error(error.message);
-    },
-  });
-
-  const closeDialog = () => {
-    setActionDialog({ type: null, booking: null });
-    setActionReason('');
-  };
-
   const handleAction = () => {
-    if (!actionDialog.booking) return;
-
-    switch (actionDialog.type) {
-      case 'cancel':
-        cancelMutation.mutate({ bookingId: actionDialog.booking.id, reason: actionReason });
-        break;
-      case 'refund':
-        refundMutation.mutate({ bookingId: actionDialog.booking.id, reason: actionReason });
-        break;
+    if (!actionDialog.booking || !actionDialog.type) return;
+    
+    if (actionDialog.type === 'cancel') {
+      cancelMutation.mutate({
+        bookingId: actionDialog.booking.id,
+        reason: actionReason || 'Cancelled by admin',
+      });
     }
   };
 
-  const isActionLoading = cancelMutation.isPending || refundMutation.isPending;
-
-  const getStatusBadgeClass = (status: string) => {
-    switch (status) {
-      case 'confirmed':
-      case 'paid':
-        return 'badge-success';
-      case 'pending':
-        return 'badge-warning';
-      case 'cancelled':
-        return 'badge-danger';
-      default:
-        return 'badge-muted';
+  // Handle call action
+  const handleCall = (booking: Booking) => {
+    const phone = getUserPhone(booking);
+    if (phone) {
+      window.location.href = `tel:${phone}`;
+    } else {
+      toast.error('No phone number available for this user');
     }
   };
 
@@ -216,35 +193,47 @@ export default function BookingsPage() {
       style: 'currency',
       currency: 'INR',
       maximumFractionDigits: 0,
-    }).format(amount || 0);
+    }).format(amount);
   };
 
-  const formatDate = (dateString: string | undefined | null) => {
-    if (!dateString) return 'N/A';
+  const formatDate = (dateStr: string | undefined) => {
+    if (!dateStr) return 'N/A';
     try {
-      const date = new Date(dateString);
-      if (isNaN(date.getTime())) return 'Invalid date';
-      return format(date, 'MMM d, yyyy');
+      return format(new Date(dateStr), 'MMM d, yyyy');
     } catch {
-      return 'Invalid date';
+      return dateStr;
+    }
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status.toLowerCase()) {
+      case 'confirmed':
+      case 'completed':
+        return 'bg-success/10 text-success';
+      case 'pending':
+        return 'bg-warning/10 text-warning';
+      case 'cancelled':
+        return 'bg-destructive/10 text-destructive';
+      default:
+        return 'bg-muted text-muted-foreground';
     }
   };
 
   return (
     <AdminLayout title="Bookings">
       <div className="space-y-4">
-        {/* Tabs for Live/Previous */}
+        {/* Tabs */}
         <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'live' | 'previous')}>
-          <TabsList className="grid w-full grid-cols-2 rounded-xl bg-muted">
+          <TabsList className="grid w-full grid-cols-2 rounded-xl h-11">
             <TabsTrigger value="live" className="rounded-lg">Live Bookings</TabsTrigger>
             <TabsTrigger value="previous" className="rounded-lg">Previous</TabsTrigger>
           </TabsList>
         </Tabs>
 
-        {/* Filters Row */}
-        <div className="flex gap-2">
+        {/* Filters */}
+        <div className="flex gap-3">
           <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="h-10 rounded-xl flex-1">
+            <SelectTrigger className="flex-1 h-10 rounded-xl">
               <SelectValue placeholder="Status" />
             </SelectTrigger>
             <SelectContent className="bg-background">
@@ -252,142 +241,145 @@ export default function BookingsPage() {
               <SelectItem value="confirmed">Confirmed</SelectItem>
               <SelectItem value="pending">Pending</SelectItem>
               <SelectItem value="cancelled">Cancelled</SelectItem>
+              <SelectItem value="completed">Completed</SelectItem>
             </SelectContent>
           </Select>
-
-          {venues.length > 1 && (
-            <Select value={venueFilter} onValueChange={setVenueFilter}>
-              <SelectTrigger className="h-10 rounded-xl flex-1">
-                <SelectValue placeholder="Venue" />
-              </SelectTrigger>
-              <SelectContent className="bg-background">
-                <SelectItem value="all">All Venues</SelectItem>
-                {venues.map((venue) => (
-                  <SelectItem key={venue.id} value={venue.id}>
-                    {venue.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
+          <Select value={venueFilter} onValueChange={setVenueFilter}>
+            <SelectTrigger className="flex-1 h-10 rounded-xl">
+              <SelectValue placeholder="Venue" />
+            </SelectTrigger>
+            <SelectContent className="bg-background">
+              <SelectItem value="all">All Venues</SelectItem>
+              {venues.map((venue) => (
+                <SelectItem key={venue.id} value={venue.id}>
+                  {venue.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         {/* Bookings List */}
-        <div className="space-y-3">
-          {isLoading ? (
-            Array.from({ length: 4 }).map((_, i) => (
-              <Card key={i} className="card-elevated">
+        {isLoading ? (
+          <div className="space-y-3">
+            {[...Array(3)].map((_, i) => (
+              <Skeleton key={i} className="h-40 rounded-xl" />
+            ))}
+          </div>
+        ) : !data?.bookings?.length ? (
+          <Card className="card-elevated">
+            <CardContent className="p-8 text-center">
+              <p className="text-muted-foreground">No bookings found</p>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="space-y-3">
+            {data.bookings.map((booking) => (
+              <Card key={booking.id} className="card-elevated overflow-hidden">
                 <CardContent className="p-4">
                   <div className="flex items-start gap-3">
-                    <Skeleton className="h-12 w-12 rounded-full" />
-                    <div className="flex-1 space-y-2">
-                      <Skeleton className="h-4 w-32" />
-                      <Skeleton className="h-3 w-40" />
-                      <Skeleton className="h-3 w-28" />
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))
-          ) : data?.bookings && data.bookings.length > 0 ? (
-            data.bookings.map((booking) => (
-              <Card key={booking.id} className="card-elevated">
-                <CardContent className="p-4">
-                  <div className="flex items-start gap-3">
-                    <Avatar className="h-12 w-12">
+                    {/* User Avatar */}
+                    <Avatar className="h-12 w-12 shrink-0">
                       <AvatarImage src={getUserAvatar(booking)} alt={getUserName(booking)} />
-                      <AvatarFallback className="bg-primary/10 text-primary font-semibold">
+                      <AvatarFallback className="bg-primary/10 text-primary font-medium">
                         {getUserInitials(booking)}
                       </AvatarFallback>
                     </Avatar>
+
+                    {/* Booking Details */}
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between mb-1">
-                        <p className="font-semibold text-foreground truncate">
-                          {getUserName(booking)}
-                        </p>
-                        <span className={getStatusBadgeClass(booking.status)}>
-                          {booking.status.charAt(0).toUpperCase() + booking.status.slice(1)}
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <h3 className="font-semibold text-foreground truncate">
+                            {getUserName(booking)}
+                          </h3>
+                          <div className="flex items-center gap-1.5 text-sm text-muted-foreground mt-0.5">
+                            <MapPin className="h-3.5 w-3.5" />
+                            <span className="truncate">{getVenueName(booking)}</span>
+                            {booking.court_number && (
+                              <span className="text-xs">• Court {booking.court_number}</span>
+                            )}
+                          </div>
+                        </div>
+                        <span className={`px-2 py-0.5 text-xs font-medium rounded-full shrink-0 ${getStatusColor(booking.status)}`}>
+                          {booking.status}
                         </span>
                       </div>
-                      <div className="flex items-center gap-1 text-sm text-muted-foreground mb-1">
-                        <MapPin className="h-3 w-3 flex-shrink-0" />
-                        <span className="truncate">{getVenueName(booking)}</span>
-                        {booking.court_number && (
-                          <span className="text-xs">• Court {booking.court_number}</span>
+
+                      {/* Players & Time */}
+                      <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
+                        {booking.player_count && (
+                          <div className="flex items-center gap-1">
+                            <Users className="h-3.5 w-3.5" />
+                            <span>{booking.player_count} players</span>
+                          </div>
                         )}
-                      </div>
-                      {booking.player_count && (
-                        <div className="flex items-center gap-1 text-sm text-muted-foreground mb-1">
-                          <Users className="h-3 w-3" />
-                          <span>Number of Players: {booking.player_count}</span>
+                        <div className="flex items-center gap-1">
+                          <Clock className="h-3.5 w-3.5" />
+                          <span>{getBookingTime(booking)}</span>
                         </div>
-                      )}
-                      <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                        <Clock className="h-3 w-3" />
-                        <span>{formatDate(getBookingDate(booking))} • {getBookingTime(booking)}</span>
                       </div>
-                      <div className="flex items-center justify-between mt-3">
-                        <span className="font-bold text-success text-lg">
+
+                      {/* Date & Amount */}
+                      <div className="flex items-center justify-between mt-2">
+                        <span className="text-sm text-muted-foreground">
+                          {formatDate(getBookingDate(booking))}
+                        </span>
+                        <span className="font-semibold text-foreground">
                           {formatCurrency(getBookingAmount(booking))}
                         </span>
+                      </div>
+
+                      {/* Actions */}
+                      <div className="flex items-center gap-2 mt-3 pt-3 border-t border-border">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-8 rounded-lg flex-1 gap-1.5"
+                          onClick={() => handleCall(booking)}
+                        >
+                          <Phone className="h-3.5 w-3.5" />
+                          Call
+                        </Button>
                         {booking.status !== 'cancelled' && (
-                          <div className="flex gap-2">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="h-8 rounded-lg"
-                              onClick={() => setActionDialog({ type: 'refund', booking })}
-                            >
-                              <RefreshCw className="h-3 w-3 mr-1" />
-                              Refund
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="destructive"
-                              className="h-8 rounded-lg"
-                              onClick={() => setActionDialog({ type: 'cancel', booking })}
-                            >
-                              <XCircle className="h-3 w-3 mr-1" />
-                              Cancel
-                            </Button>
-                          </div>
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            className="h-8 rounded-lg flex-1 gap-1.5"
+                            onClick={() => setActionDialog({ type: 'cancel', booking })}
+                          >
+                            <XCircle className="h-3.5 w-3.5" />
+                            Cancel
+                          </Button>
                         )}
                       </div>
                     </div>
                   </div>
                 </CardContent>
               </Card>
-            ))
-          ) : (
-            <Card className="card-elevated">
-              <CardContent className="py-12 text-center text-muted-foreground">
-                No bookings found
-              </CardContent>
-            </Card>
-          )}
-        </div>
+            ))}
+          </div>
+        )}
 
         {/* Pagination */}
-        {data && data.total > 20 && (
-          <div className="flex justify-center gap-2 pt-2">
+        {data?.total && data.total > 20 && (
+          <div className="flex items-center justify-center gap-2 pt-4">
             <Button
               variant="outline"
               size="sm"
+              onClick={() => setPage(p => Math.max(1, p - 1))}
               disabled={page === 1}
-              onClick={() => setPage(page - 1)}
-              className="rounded-xl"
             >
               Previous
             </Button>
-            <span className="flex items-center px-4 text-sm text-muted-foreground">
-              {page} / {Math.ceil(data.total / 20)}
+            <span className="text-sm text-muted-foreground">
+              Page {page} of {Math.ceil(data.total / 20)}
             </span>
             <Button
               variant="outline"
               size="sm"
+              onClick={() => setPage(p => p + 1)}
               disabled={page >= Math.ceil(data.total / 20)}
-              onClick={() => setPage(page + 1)}
-              className="rounded-xl"
             >
               Next
             </Button>
@@ -395,42 +387,38 @@ export default function BookingsPage() {
         )}
       </div>
 
-      {/* Action Dialog */}
-      <Dialog open={actionDialog.type !== null} onOpenChange={(open) => !open && closeDialog()}>
-        <DialogContent className="mx-4 rounded-2xl">
+      {/* Cancel Dialog */}
+      <Dialog open={actionDialog.type === 'cancel'} onOpenChange={() => closeDialog()}>
+        <DialogContent className="rounded-xl">
           <DialogHeader>
-            <DialogTitle>
-              {actionDialog.type === 'cancel' ? 'Cancel Booking' : 'Refund Booking'}
-            </DialogTitle>
+            <DialogTitle>Cancel Booking</DialogTitle>
             <DialogDescription>
-              {actionDialog.type === 'cancel' 
-                ? 'This will cancel the booking and notify the user. The slot will become available again.' 
-                : 'Process a refund for this booking.'}
+              Are you sure you want to cancel this booking? The user will be notified.
             </DialogDescription>
           </DialogHeader>
-
-          <div className="space-y-2">
-            <Label>Reason</Label>
-            <Textarea
-              value={actionReason}
-              onChange={(e) => setActionReason(e.target.value)}
-              placeholder="Enter reason..."
-              className="rounded-xl"
-            />
+          <div className="space-y-4 py-4">
+            <div>
+              <Label>Reason for cancellation</Label>
+              <Textarea
+                placeholder="Enter reason..."
+                value={actionReason}
+                onChange={(e) => setActionReason(e.target.value)}
+                className="mt-2 rounded-xl"
+              />
+            </div>
           </div>
-
-          <DialogFooter className="flex-row gap-2">
-            <Button variant="outline" onClick={closeDialog} className="flex-1 rounded-xl">
-              Cancel
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={closeDialog} className="rounded-xl">
+              Keep Booking
             </Button>
-            <Button 
+            <Button
+              variant="destructive"
               onClick={handleAction}
-              disabled={isActionLoading || !actionReason}
-              variant={actionDialog.type === 'cancel' ? 'destructive' : 'default'}
-              className="flex-1 rounded-xl"
+              disabled={cancelMutation.isPending}
+              className="rounded-xl gap-2"
             >
-              {isActionLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {actionDialog.type === 'cancel' ? 'Cancel Booking' : 'Process Refund'}
+              {cancelMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+              Cancel Booking
             </Button>
           </DialogFooter>
         </DialogContent>

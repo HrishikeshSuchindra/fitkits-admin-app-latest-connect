@@ -72,6 +72,7 @@ export interface Booking {
     display_name: string;
     username?: string;
     avatar_url?: string;
+    phone_number?: string;
   };
   // Legacy nested format
   user?: {
