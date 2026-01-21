@@ -137,8 +137,8 @@ export default function SlotBlocksPage() {
     );
   }, [selectedVenue?.opening_time, selectedVenue?.closing_time]);
 
-  // Merge slot availability with generated slots
-  const timeSlots = useMemo(() => {
+  // Merge slot availability with generated slots - use only SlotAvailability fields
+  const timeSlots: SlotAvailability[] = useMemo(() => {
     const availabilityMap = new Map(
       (slotAvailability?.slots || []).map(s => [s.time, s])
     );
@@ -148,12 +148,11 @@ export default function SlotBlocksPage() {
       return {
         time,
         is_blocked: slot?.is_blocked || false,
-        is_booked: slot?.is_booked || false,
         booked_courts: slot?.booked_courts || 0,
-        total_courts: slot?.total_courts || selectedVenue?.courts_count || 3,
+        block_reason: slot?.block_reason,
       };
     });
-  }, [allTimeSlots, slotAvailability?.slots, selectedVenue?.courts_count]);
+  }, [allTimeSlots, slotAvailability?.slots]);
 
   // Handle undo - permanent, available anytime
   const handleUndo = async () => {
@@ -187,11 +186,18 @@ export default function SlotBlocksPage() {
     setLastBlockAction(null);
   };
 
-  // Block multiple slots mutation
+  // Block multiple slots mutation - use correct function signature
   const blockSlotsMutation = useMutation({
     mutationFn: async ({ slots, reason }: { slots: string[]; reason: string }) => {
       const dateStr = format(selectedDate!, 'yyyy-MM-dd');
-      return edgeFunctionApi.blockMultipleSlots(selectedVenueId, dateStr, slots, reason);
+      // Convert to the expected array format
+      const slotsArray = slots.map(slot_time => ({
+        venue_id: selectedVenueId,
+        slot_date: dateStr,
+        slot_time,
+        reason: reason || undefined,
+      }));
+      return edgeFunctionApi.blockMultipleSlots(slotsArray);
     },
     onSuccess: (_, { slots, reason }) => {
       // Store action for permanent undo
@@ -322,6 +328,7 @@ export default function SlotBlocksPage() {
   // Count blocked and available slots for the selected date
   const blockedCount = timeSlots.filter(s => s.is_blocked).length;
   const availableCount = timeSlots.length - blockedCount;
+  const maxCourts = selectedVenue?.courts_count || 3;
 
   return (
     <AdminLayout title="Slot Blocks">
@@ -461,20 +468,13 @@ export default function SlotBlocksPage() {
                   <Label className="text-sm text-muted-foreground mb-2 block">
                     Select slots to block (tap blocked slots to unblock)
                   </Label>
-                  {slotsLoading ? (
-                    <div className="grid grid-cols-4 gap-2">
-                      {[...Array(12)].map((_, i) => (
-                        <Skeleton key={i} className="h-10 rounded-lg" />
-                      ))}
-                    </div>
-                  ) : (
-                    <TimeSlotGrid
-                      slots={timeSlots}
-                      selectedSlots={selectedSlots}
-                      onSlotToggle={handleSlotToggle}
-                      disabled={isActionLoading}
-                    />
-                  )}
+                  <TimeSlotGrid
+                    slots={timeSlots}
+                    selectedSlots={selectedSlots}
+                    onSlotToggle={handleSlotToggle}
+                    maxCourts={maxCourts}
+                    isLoading={slotsLoading}
+                  />
                 </div>
               )}
 
@@ -549,16 +549,18 @@ export default function SlotBlocksPage() {
           </Card>
         )}
 
-        {/* Block Confirmation Dialog */}
+        {/* Block Confirmation Dialog - use correct props */}
         <BlockSlotDialog
           open={showBlockDialog}
           onOpenChange={setShowBlockDialog}
+          selectedDate={selectedDate}
+          selectedSlots={selectedSlots}
+          blockMode={blockMode}
+          onBlockModeChange={setBlockMode}
+          reason={blockReason}
+          onReasonChange={setBlockReason}
           onConfirm={handleConfirmBlock}
           isLoading={blockSlotsMutation.isPending || blockFullDayMutation.isPending}
-          slotCount={blockMode === 'fullDay' ? timeSlots.length : selectedSlots.length}
-          isFullDay={blockMode === 'fullDay'}
-          date={selectedDate ? format(selectedDate, 'MMMM d, yyyy') : ''}
-          reason={blockReason}
         />
       </div>
     </AdminLayout>
