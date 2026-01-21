@@ -1,5 +1,15 @@
 import { supabase } from './supabase';
 
+function buildQueryString(params: Record<string, unknown>): string {
+  const qs = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value === undefined || value === null || value === '') continue;
+    qs.append(key, String(value));
+  }
+  const str = qs.toString();
+  return str ? `?${str}` : '';
+}
+
 // Types
 export interface User {
   id: string;
@@ -241,10 +251,11 @@ export const edgeFunctionApi = {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session?.user) throw new Error('Not authenticated');
 
-    const { data, error } = await supabase.functions.invoke('admin-bookings', {
-      method: 'POST',
-      body: { ...params, action: 'get_bookings' },
-    });
+    // This edge function only supports GET; pass filters as query params.
+    const { data, error } = await supabase.functions.invoke(
+      `admin-bookings${buildQueryString(params as Record<string, unknown>)}`,
+      { method: 'GET' }
+    );
 
     if (error) {
       console.error('Get bookings error:', error);
@@ -304,10 +315,11 @@ export const edgeFunctionApi = {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session?.user) throw new Error('Not authenticated');
 
-    const { data, error } = await supabase.functions.invoke('admin-slot-blocks', {
-      method: 'POST',
-      body: { ...params, action: 'get_blocked_slots' },
-    });
+    // This edge function reads via GET (POST is treated as create-block).
+    const { data, error } = await supabase.functions.invoke(
+      `admin-slot-blocks${buildQueryString(params as Record<string, unknown>)}`,
+      { method: 'GET' }
+    );
 
     if (error) {
       console.error('Get blocked slots error:', error);
@@ -395,14 +407,15 @@ export const edgeFunctionApi = {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session?.user) throw new Error('Not authenticated');
 
-    const { data, error } = await supabase.functions.invoke('admin-slot-blocks', {
-      method: 'POST',
-      body: {
+    // Slot availability is a read operation; call via GET with query params.
+    const { data, error } = await supabase.functions.invoke(
+      `admin-slot-blocks${buildQueryString({
         action: 'slot_availability',
         venue_id: params.venue_id,
         date: params.date,
-      },
-    });
+      })}`,
+      { method: 'GET' }
+    );
 
     if (error) {
       console.error('Get slot availability error:', error);
@@ -425,23 +438,15 @@ export const edgeFunctionApi = {
     const lastDay = new Date(params.year, params.month, 0).getDate();
     const endDate = `${params.year}-${String(params.month).padStart(2, '0')}-${lastDay}`;
 
-    const { data, error } = await supabase.functions.invoke('admin-slot-blocks', {
-      method: 'POST',
-      body: {
-        action: 'get_blocked_days',
-        venue_id: params.venue_id,
-        date_from: startDate,
-        date_to: endDate,
-      },
+    const { blocks } = await edgeFunctionApi.getBlockedSlots({
+      venue_id: params.venue_id,
+      date_from: startDate,
+      date_to: endDate,
+      // ensure we capture the whole month even if many blocks
+      limit: 5000,
+      page: 1,
     });
 
-    if (error) {
-      console.error('Get blocked days error:', error);
-      throw new Error(error.message);
-    }
-
-    // Extract unique dates from blocks
-    const blocks = data?.blocks || [];
     const uniqueDates = [...new Set(blocks.map((b: any) => b.slot_date))] as string[];
     
     return { dates: uniqueDates };
@@ -460,23 +465,14 @@ export const edgeFunctionApi = {
     const lastDay = new Date(params.year, params.month, 0).getDate();
     const endDate = `${params.year}-${String(params.month).padStart(2, '0')}-${lastDay}`;
 
-    const { data, error } = await supabase.functions.invoke('admin-bookings', {
-      method: 'POST',
-      body: {
-        action: 'get_booked_days',
-        venue_id: params.venue_id,
-        date_from: startDate,
-        date_to: endDate,
-      },
+    const { bookings } = await edgeFunctionApi.getBookings({
+      venue_id: params.venue_id,
+      date_from: startDate,
+      date_to: endDate,
+      limit: 5000,
+      page: 1,
     });
 
-    if (error) {
-      console.error('Get booked days error:', error);
-      throw new Error(error.message);
-    }
-
-    // Extract unique booking dates
-    const bookings = data?.bookings || [];
     const uniqueDates = [...new Set(bookings.map((b: any) => b.booking_date))] as string[];
     
     return { dates: uniqueDates };
