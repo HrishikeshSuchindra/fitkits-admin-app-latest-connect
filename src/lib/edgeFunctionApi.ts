@@ -183,7 +183,10 @@ export const edgeFunctionApi = {
     };
   },
 
-  async createVenue(venue: Partial<Venue>): Promise<{ venue: Venue }> {
+  async createVenue(venue: Partial<Venue> & {
+    opening_hours?: Record<string, { enabled: boolean; open: string; close: string }>;
+    min_booking_duration?: number;
+  }): Promise<{ venue: Venue }> {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session?.user) throw new Error('Not authenticated');
 
@@ -200,6 +203,9 @@ export const edgeFunctionApi = {
         image_url: venue.image_url,
         is_active: venue.is_active ?? true,
         amenities: venue.amenities || [],
+        description: venue.description || '',
+        opening_hours: venue.opening_hours || null,
+        min_booking_duration: venue.min_booking_duration || 60,
       },
     });
 

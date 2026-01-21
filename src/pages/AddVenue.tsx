@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { FileText, Image, DollarSign, Eye, ArrowLeft, ArrowRight, Upload, X, Check, Clock, MapPin, Star, Wifi, Car, Coffee, Music, Users, Tv } from "lucide-react";
+import { FileText, Image, DollarSign, Eye, Upload, X, Check, Clock, MapPin, Star, Wifi, Car, Shirt, Wind, Dumbbell, MoreHorizontal, Camera, Heart, ChevronLeft, ChevronRight } from "lucide-react";
 import { MobileHeader } from "@/components/ui/MobileHeader";
 import { StepIndicator } from "@/components/ui/StepIndicator";
 import { Button } from "@/components/ui/button";
@@ -8,7 +8,12 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { edgeFunctionApi } from "@/lib/edgeFunctionApi";
+import { uploadVenuePhoto, uploadMultipleVenuePhotos } from "@/lib/uploadVenuePhoto";
+import { toast } from "sonner";
 
 const steps = [
   { id: 1, label: "Basic", icon: FileText },
@@ -17,52 +22,91 @@ const steps = [
   { id: 4, label: "Review", icon: Eye },
 ];
 
-const categories = [
-  "Photography Studio",
-  "Event Space",
-  "Meeting Room",
-  "Outdoor Venue",
-  "Recording Studio",
-  "Coworking Space",
+const sportCategories = [
+  { value: "padel", label: "Padel" },
+  { value: "tennis", label: "Tennis" },
+  { value: "badminton", label: "Badminton" },
+  { value: "pickleball", label: "Pickleball" },
+  { value: "squash", label: "Squash" },
+  { value: "multi-sport", label: "Multi-sport" },
 ];
 
 const amenities = [
   { id: "wifi", label: "WiFi", icon: Wifi },
   { id: "parking", label: "Parking", icon: Car },
-  { id: "coffee", label: "Coffee", icon: Coffee },
-  { id: "sound", label: "Sound System", icon: Music },
-  { id: "capacity", label: "Large Capacity", icon: Users },
-  { id: "av", label: "AV Equipment", icon: Tv },
+  { id: "changing_rooms", label: "Changing Rooms", icon: Shirt },
+  { id: "air_con", label: "Air Con", icon: Wind },
+  { id: "equipment", label: "Equipment", icon: Dumbbell },
+  { id: "other", label: "Other", icon: MoreHorizontal },
 ];
 
-const daysOfWeek = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+const daysOfWeek = [
+  { short: "Mon", full: "Monday" },
+  { short: "Tue", full: "Tuesday" },
+  { short: "Wed", full: "Wednesday" },
+  { short: "Thu", full: "Thursday" },
+  { short: "Fri", full: "Friday" },
+  { short: "Sat", full: "Saturday" },
+  { short: "Sun", full: "Sunday" },
+];
 
-const durationOptions = ["30 min", "1 hour", "2 hours", "4 hours", "Custom"];
+const durationOptions = [
+  { label: "30 min", value: 30 },
+  { label: "1 hour", value: 60 },
+  { label: "1.5 hours", value: 90 },
+  { label: "2 hours", value: 120 },
+  { label: "3 hours", value: 180 },
+  { label: "Custom", value: 0 },
+];
+
+const countries = [
+  { value: "india", label: "India" },
+  { value: "usa", label: "United States" },
+  { value: "uk", label: "United Kingdom" },
+  { value: "uae", label: "UAE" },
+  { value: "australia", label: "Australia" },
+  { value: "singapore", label: "Singapore" },
+];
 
 export default function AddVenue() {
   const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState(1);
+  const [isPublishing, setIsPublishing] = useState(false);
+  const [previewImageIndex, setPreviewImageIndex] = useState(0);
   
+  const coverPhotoRef = useRef<HTMLInputElement>(null);
+  const additionalPhotosRef = useRef<HTMLInputElement>(null);
+
   // Form state
   const [formData, setFormData] = useState({
+    // Basic Info
     name: "",
     category: "",
     description: "",
-    address: "",
+    
+    // Location
+    streetAddress: "",
     city: "",
     postalCode: "",
     country: "",
-    photos: [] as string[],
+    
+    // Media
+    coverPhoto: null as File | null,
+    coverPhotoPreview: "",
+    additionalPhotos: [] as File[],
+    additionalPhotosPreviews: [] as string[],
     selectedAmenities: [] as string[],
-    schedule: daysOfWeek.map((day) => ({
-      day,
-      enabled: day !== "Sunday",
+    
+    // Pricing & Availability
+    schedule: daysOfWeek.map((day, index) => ({
+      day: day.short,
+      fullDay: day.full,
+      enabled: index < 5, // Mon-Fri enabled by default
       open: "09:00",
-      close: "18:00",
+      close: "17:00",
     })),
-    minDuration: "1 hour",
+    minDuration: 60, // Default 1 hour in minutes
     pricePerHour: "",
-    peakPrice: "",
   });
 
   const handleNext = () => {
@@ -92,10 +136,176 @@ export default function AddVenue() {
     }));
   };
 
-  const handlePublish = () => {
-    console.log("Publishing venue:", formData);
-    navigate("/venues");
+  const handleScheduleTimeChange = (index: number, field: 'open' | 'close', value: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      schedule: prev.schedule.map((s, i) =>
+        i === index ? { ...s, [field]: value } : s
+      ),
+    }));
   };
+
+  const handleCopyToAll = () => {
+    const firstEnabled = formData.schedule.find(s => s.enabled);
+    if (!firstEnabled) return;
+    
+    setFormData((prev) => ({
+      ...prev,
+      schedule: prev.schedule.map((s) => ({
+        ...s,
+        open: firstEnabled.open,
+        close: firstEnabled.close,
+      })),
+    }));
+    toast.success("Copied schedule to all days");
+  };
+
+  const handleCoverPhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setFormData((prev) => ({
+        ...prev,
+        coverPhoto: file,
+        coverPhotoPreview: URL.createObjectURL(file),
+      }));
+    }
+  };
+
+  const handleAdditionalPhotosSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    const maxPhotos = 9; // Max 9 additional photos (10 total with cover)
+    const remainingSlots = maxPhotos - formData.additionalPhotos.length;
+    const newFiles = files.slice(0, remainingSlots);
+    
+    if (newFiles.length > 0) {
+      setFormData((prev) => ({
+        ...prev,
+        additionalPhotos: [...prev.additionalPhotos, ...newFiles],
+        additionalPhotosPreviews: [
+          ...prev.additionalPhotosPreviews,
+          ...newFiles.map((f) => URL.createObjectURL(f)),
+        ],
+      }));
+    }
+  };
+
+  const handleRemoveCoverPhoto = () => {
+    setFormData((prev) => ({
+      ...prev,
+      coverPhoto: null,
+      coverPhotoPreview: "",
+    }));
+  };
+
+  const handleRemoveAdditionalPhoto = (index: number) => {
+    setFormData((prev) => ({
+      ...prev,
+      additionalPhotos: prev.additionalPhotos.filter((_, i) => i !== index),
+      additionalPhotosPreviews: prev.additionalPhotosPreviews.filter((_, i) => i !== index),
+    }));
+  };
+
+  const handlePublish = async () => {
+    // Validation
+    if (!formData.name.trim()) {
+      toast.error("Venue name is required");
+      setCurrentStep(1);
+      return;
+    }
+    if (!formData.category) {
+      toast.error("Category is required");
+      setCurrentStep(1);
+      return;
+    }
+    if (!formData.streetAddress.trim() || !formData.city.trim()) {
+      toast.error("Address and city are required");
+      setCurrentStep(1);
+      return;
+    }
+    if (!formData.pricePerHour) {
+      toast.error("Price per hour is required");
+      setCurrentStep(3);
+      return;
+    }
+
+    setIsPublishing(true);
+
+    try {
+      const slug = formData.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+      
+      let coverPhotoUrl = "";
+      const photoUrls: string[] = [];
+
+      // Upload cover photo
+      if (formData.coverPhoto) {
+        try {
+          coverPhotoUrl = await uploadVenuePhoto(formData.coverPhoto, slug, 0);
+        } catch (uploadError) {
+          console.warn('Cover photo upload failed, continuing without it:', uploadError);
+        }
+      }
+
+      // Upload additional photos
+      if (formData.additionalPhotos.length > 0) {
+        try {
+          const uploadedUrls = await uploadMultipleVenuePhotos(
+            formData.additionalPhotos,
+            slug,
+            1
+          );
+          photoUrls.push(...uploadedUrls);
+        } catch (uploadError) {
+          console.warn('Additional photos upload failed, continuing without them:', uploadError);
+        }
+      }
+
+      // Build opening hours JSONB
+      const openingHours = formData.schedule.reduce((acc, day) => {
+        acc[day.day] = {
+          enabled: day.enabled,
+          open: day.open,
+          close: day.close,
+        };
+        return acc;
+      }, {} as Record<string, { enabled: boolean; open: string; close: string }>);
+
+      // Create venue
+      const venueData = {
+        name: formData.name,
+        slug,
+        category: 'courts',
+        sport: formData.category,
+        address: formData.streetAddress,
+        location: formData.city,
+        price_per_hour: parseFloat(formData.pricePerHour),
+        image_url: coverPhotoUrl || null,
+        amenities: formData.selectedAmenities,
+        description: formData.description,
+        opening_hours: openingHours,
+        min_booking_duration: formData.minDuration,
+        is_active: true,
+      };
+
+      await edgeFunctionApi.createVenue(venueData);
+
+      toast.success("Venue published successfully!");
+      navigate("/venues");
+    } catch (error: any) {
+      console.error('Publish error:', error);
+      toast.error(error.message || "Failed to publish venue");
+    } finally {
+      setIsPublishing(false);
+    }
+  };
+
+  // Get all preview images for the carousel
+  const allPreviewImages = [
+    formData.coverPhotoPreview,
+    ...formData.additionalPhotosPreviews,
+  ].filter(Boolean);
+
+  const canGoToPrevImage = previewImageIndex > 0;
+  const canGoToNextImage = previewImageIndex < allPreviewImages.length - 1;
 
   return (
     <div className="mobile-container pb-6">
@@ -119,7 +329,7 @@ export default function AddVenue() {
               <Label htmlFor="name">Venue Name *</Label>
               <Input
                 id="name"
-                placeholder="Enter venue name"
+                placeholder="e.g., Downtown Tennis Club"
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 className="mt-1.5"
@@ -128,29 +338,28 @@ export default function AddVenue() {
 
             <div>
               <Label>Category *</Label>
-              <div className="grid grid-cols-2 gap-2 mt-1.5">
-                {categories.map((cat) => (
-                  <button
-                    key={cat}
-                    onClick={() => setFormData({ ...formData, category: cat })}
-                    className={cn(
-                      "p-3 rounded-xl text-sm font-medium border transition-all",
-                      formData.category === cat
-                        ? "border-primary bg-primary-light text-primary"
-                        : "border-border bg-card text-muted-foreground hover:border-primary/50"
-                    )}
-                  >
-                    {cat}
-                  </button>
-                ))}
-              </div>
+              <Select
+                value={formData.category}
+                onValueChange={(value) => setFormData({ ...formData, category: value })}
+              >
+                <SelectTrigger className="mt-1.5">
+                  <SelectValue placeholder="Select a category" />
+                </SelectTrigger>
+                <SelectContent>
+                  {sportCategories.map((cat) => (
+                    <SelectItem key={cat.value} value={cat.value}>
+                      {cat.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             <div>
               <Label htmlFor="description">Description</Label>
               <Textarea
                 id="description"
-                placeholder="Describe your venue..."
+                placeholder="Describe your venue, its features, and what makes it special..."
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                 className="mt-1.5 min-h-[120px]"
@@ -163,17 +372,19 @@ export default function AddVenue() {
 
             <div className="space-y-3">
               <Label>Location</Label>
-              <div className="card-elevated p-4 flex items-center justify-center h-32 border-2 border-dashed border-border">
+              
+              {/* Map placeholder */}
+              <div className="card-elevated p-4 flex items-center justify-center h-32 border-2 border-dashed border-border cursor-pointer hover:border-primary/50 transition-colors">
                 <div className="text-center">
                   <MapPin className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
-                  <p className="text-sm text-muted-foreground">Select on map</p>
+                  <p className="text-sm text-muted-foreground">Tap to select location</p>
                 </div>
               </div>
               
               <Input
                 placeholder="Street Address"
-                value={formData.address}
-                onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                value={formData.streetAddress}
+                onChange={(e) => setFormData({ ...formData, streetAddress: e.target.value })}
               />
               
               <div className="grid grid-cols-2 gap-3">
@@ -189,11 +400,21 @@ export default function AddVenue() {
                 />
               </div>
               
-              <Input
-                placeholder="Country"
+              <Select
                 value={formData.country}
-                onChange={(e) => setFormData({ ...formData, country: e.target.value })}
-              />
+                onValueChange={(value) => setFormData({ ...formData, country: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select country" />
+                </SelectTrigger>
+                <SelectContent>
+                  {countries.map((country) => (
+                    <SelectItem key={country.value} value={country.value}>
+                      {country.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
         )}
@@ -203,32 +424,97 @@ export default function AddVenue() {
           <div className="space-y-6 animate-fade-in">
             <div>
               <Label>Photos</Label>
-              <div className="mt-2 space-y-3">
+              <p className="text-xs text-muted-foreground mt-1 mb-3">
+                Add photos of your venue. The first photo will be your cover image.
+              </p>
+              
+              {/* Hidden file inputs */}
+              <input
+                type="file"
+                ref={coverPhotoRef}
+                accept="image/*"
+                className="hidden"
+                onChange={handleCoverPhotoSelect}
+              />
+              <input
+                type="file"
+                ref={additionalPhotosRef}
+                accept="image/*"
+                multiple
+                className="hidden"
+                onChange={handleAdditionalPhotosSelect}
+              />
+
+              <div className="space-y-3">
                 {/* Cover Photo Upload */}
-                <div className="aspect-video rounded-xl border-2 border-dashed border-border bg-muted/50 flex flex-col items-center justify-center hover:border-primary/50 transition-colors cursor-pointer">
-                  <Upload className="w-10 h-10 text-muted-foreground mb-2" />
-                  <p className="text-sm font-medium text-foreground">Upload Cover Photo</p>
-                  <p className="text-xs text-muted-foreground">PNG, JPG up to 10MB</p>
-                </div>
+                {formData.coverPhotoPreview ? (
+                  <div className="relative aspect-video rounded-xl overflow-hidden">
+                    <img
+                      src={formData.coverPhotoPreview}
+                      alt="Cover"
+                      className="w-full h-full object-cover"
+                    />
+                    <button
+                      onClick={handleRemoveCoverPhoto}
+                      className="absolute top-2 right-2 w-8 h-8 bg-black/50 rounded-full flex items-center justify-center text-white hover:bg-black/70 transition-colors"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                    <div className="absolute bottom-2 left-2 px-2 py-1 bg-black/50 rounded-md text-xs text-white">
+                      Cover Photo
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => coverPhotoRef.current?.click()}
+                    className="w-full aspect-video rounded-xl border-2 border-dashed border-border bg-muted/50 flex flex-col items-center justify-center hover:border-primary/50 transition-colors cursor-pointer"
+                  >
+                    <Camera className="w-10 h-10 text-muted-foreground mb-2" />
+                    <p className="text-sm font-medium text-foreground">Upload Cover Photo</p>
+                    <p className="text-xs text-muted-foreground">This will be your main listing image</p>
+                  </button>
+                )}
 
                 {/* Additional Photos Grid */}
                 <div className="grid grid-cols-4 gap-2">
-                  {[...Array(4)].map((_, i) => (
-                    <div
-                      key={i}
+                  {formData.additionalPhotosPreviews.map((preview, index) => (
+                    <div key={index} className="relative aspect-square rounded-lg overflow-hidden">
+                      <img
+                        src={preview}
+                        alt={`Photo ${index + 2}`}
+                        className="w-full h-full object-cover"
+                      />
+                      <button
+                        onClick={() => handleRemoveAdditionalPhoto(index)}
+                        className="absolute top-1 right-1 w-6 h-6 bg-black/50 rounded-full flex items-center justify-center text-white hover:bg-black/70 transition-colors"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  ))}
+                  
+                  {formData.additionalPhotosPreviews.length < 9 && (
+                    <button
+                      onClick={() => additionalPhotosRef.current?.click()}
                       className="aspect-square rounded-lg border-2 border-dashed border-border bg-muted/50 flex items-center justify-center hover:border-primary/50 transition-colors cursor-pointer"
                     >
                       <Upload className="w-5 h-5 text-muted-foreground" />
-                    </div>
-                  ))}
+                    </button>
+                  )}
                 </div>
-                <p className="text-xs text-muted-foreground">Maximum 10 photos</p>
+                
+                <p className="text-xs text-muted-foreground">
+                  Drag & drop photos or tap to browse. Max 10 photos.
+                </p>
               </div>
             </div>
 
             <div>
               <Label>Amenities</Label>
-              <div className="grid grid-cols-2 gap-2 mt-2">
+              <p className="text-xs text-muted-foreground mt-1 mb-3">
+                Select the amenities available at your venue.
+              </p>
+              <div className="grid grid-cols-2 gap-2">
                 {amenities.map((amenity) => {
                   const isSelected = formData.selectedAmenities.includes(amenity.id);
                   const Icon = amenity.icon;
@@ -237,21 +523,25 @@ export default function AddVenue() {
                       key={amenity.id}
                       onClick={() => handleAmenityToggle(amenity.id)}
                       className={cn(
-                        "p-3 rounded-xl border flex items-center gap-3 transition-all",
+                        "p-3 rounded-xl border flex items-center gap-3 transition-all text-left",
                         isSelected
-                          ? "border-primary bg-primary-light"
+                          ? "border-primary bg-primary/5"
                           : "border-border bg-card hover:border-primary/50"
                       )}
                     >
+                      <Checkbox
+                        checked={isSelected}
+                        className="pointer-events-none"
+                      />
                       <div className={cn(
                         "icon-container-sm",
-                        isSelected ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
+                        isSelected ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"
                       )}>
                         <Icon className="w-4 h-4" />
                       </div>
                       <span className={cn(
                         "text-sm font-medium",
-                        isSelected ? "text-primary" : "text-foreground"
+                        isSelected ? "text-foreground" : "text-muted-foreground"
                       )}>
                         {amenity.label}
                       </span>
@@ -269,49 +559,54 @@ export default function AddVenue() {
             <div>
               <div className="flex items-center justify-between mb-3">
                 <Label>Opening Hours</Label>
-                <button className="text-sm text-primary font-medium">Copy to All</button>
+                <button
+                  onClick={handleCopyToAll}
+                  className="text-sm text-primary font-medium hover:underline"
+                >
+                  Copy to All
+                </button>
               </div>
               <div className="space-y-2">
                 {formData.schedule.map((day, index) => (
                   <div
                     key={day.day}
                     className={cn(
-                      "card-elevated p-3 flex items-center justify-between",
+                      "card-elevated p-3",
                       !day.enabled && "opacity-60"
                     )}
                   >
-                    <div className="flex items-center gap-3">
-                      <Switch
-                        checked={day.enabled}
-                        onCheckedChange={() => handleScheduleToggle(index)}
-                      />
-                      <span className="text-sm font-medium w-24">{day.day.slice(0, 3)}</span>
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-3">
+                        <Switch
+                          checked={day.enabled}
+                          onCheckedChange={() => handleScheduleToggle(index)}
+                        />
+                        <span className="text-sm font-medium">{day.day}</span>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <Input
-                        type="time"
-                        value={day.open}
-                        disabled={!day.enabled}
-                        className="w-24 h-8 text-xs"
-                        onChange={(e) => {
-                          const newSchedule = [...formData.schedule];
-                          newSchedule[index].open = e.target.value;
-                          setFormData({ ...formData, schedule: newSchedule });
-                        }}
-                      />
-                      <span className="text-muted-foreground">-</span>
-                      <Input
-                        type="time"
-                        value={day.close}
-                        disabled={!day.enabled}
-                        className="w-24 h-8 text-xs"
-                        onChange={(e) => {
-                          const newSchedule = [...formData.schedule];
-                          newSchedule[index].close = e.target.value;
-                          setFormData({ ...formData, schedule: newSchedule });
-                        }}
-                      />
-                    </div>
+                    {day.enabled && (
+                      <div className="flex items-center gap-2 ml-11">
+                        <div className="flex items-center gap-1.5">
+                          <Clock className="w-3.5 h-3.5 text-muted-foreground" />
+                          <Input
+                            type="time"
+                            value={day.open}
+                            className="w-24 h-8 text-xs"
+                            onChange={(e) => handleScheduleTimeChange(index, 'open', e.target.value)}
+                          />
+                        </div>
+                        <span className="text-muted-foreground">-</span>
+                        <div className="flex items-center gap-1.5">
+                          <Clock className="w-3.5 h-3.5 text-muted-foreground" />
+                          <Input
+                            type="time"
+                            value={day.close}
+                            className="w-24 h-8 text-xs"
+                            onChange={(e) => handleScheduleTimeChange(index, 'close', e.target.value)}
+                          />
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -322,47 +617,34 @@ export default function AddVenue() {
               <div className="flex flex-wrap gap-2 mt-2">
                 {durationOptions.map((duration) => (
                   <button
-                    key={duration}
-                    onClick={() => setFormData({ ...formData, minDuration: duration })}
+                    key={duration.value}
+                    onClick={() => setFormData({ ...formData, minDuration: duration.value })}
                     className={cn(
                       "px-4 py-2 rounded-full text-sm font-medium border transition-all",
-                      formData.minDuration === duration
+                      formData.minDuration === duration.value
                         ? "border-primary bg-primary text-primary-foreground"
                         : "border-border bg-card text-foreground hover:border-primary/50"
                     )}
                   >
-                    {duration}
+                    {duration.label}
                   </button>
                 ))}
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label htmlFor="price">Price per Hour ($)</Label>
-                <Input
-                  id="price"
-                  type="number"
-                  placeholder="85"
-                  value={formData.pricePerHour}
-                  onChange={(e) => setFormData({ ...formData, pricePerHour: e.target.value })}
-                  className="mt-1.5"
-                />
-              </div>
-              <div>
-                <Label htmlFor="peakPrice">Peak Price ($)</Label>
-                <Input
-                  id="peakPrice"
-                  type="number"
-                  placeholder="120"
-                  value={formData.peakPrice}
-                  onChange={(e) => setFormData({ ...formData, peakPrice: e.target.value })}
-                  className="mt-1.5"
-                />
-              </div>
+            <div>
+              <Label htmlFor="price">Price per Hour (₹) *</Label>
+              <Input
+                id="price"
+                type="number"
+                placeholder="e.g., 500"
+                value={formData.pricePerHour}
+                onChange={(e) => setFormData({ ...formData, pricePerHour: e.target.value })}
+                className="mt-1.5"
+              />
             </div>
 
-            <div className="card-elevated p-4 bg-primary-light/50 border-primary/20">
+            <div className="card-elevated p-4 bg-primary/5 border-primary/20">
               <div className="flex items-start gap-3">
                 <div className="icon-container-sm bg-primary/20">
                   <DollarSign className="w-4 h-4 text-primary" />
@@ -370,7 +652,7 @@ export default function AddVenue() {
                 <div>
                   <p className="text-sm font-medium text-foreground">Pricing Preview</p>
                   <p className="text-xs text-muted-foreground mt-1">
-                    Standard rate: ${formData.pricePerHour || "85"}/hr • Peak hours (6-9PM): ${formData.peakPrice || "120"}/hr
+                    Standard rate: ₹{formData.pricePerHour || "0"}/hr
                   </p>
                 </div>
               </div>
@@ -381,13 +663,49 @@ export default function AddVenue() {
         {/* Step 4: Preview */}
         {currentStep === 4 && (
           <div className="space-y-4 animate-fade-in">
-            {/* Image Preview */}
-            <div className="aspect-[16/10] rounded-xl overflow-hidden bg-muted">
-              <img
-                src="https://images.unsplash.com/photo-1497366216548-37526070297c?w=600&h=400&fit=crop"
-                alt="Venue preview"
-                className="w-full h-full object-cover"
-              />
+            {/* Image Preview with Carousel */}
+            <div className="relative aspect-[16/10] rounded-xl overflow-hidden bg-muted">
+              {allPreviewImages.length > 0 ? (
+                <>
+                  <img
+                    src={allPreviewImages[previewImageIndex]}
+                    alt="Venue preview"
+                    className="w-full h-full object-cover"
+                  />
+                  
+                  {/* Image counter */}
+                  <div className="absolute top-2 left-2 px-2 py-1 bg-black/50 rounded-md text-xs text-white">
+                    {previewImageIndex + 1} of {allPreviewImages.length}
+                  </div>
+                  
+                  {/* Favorite button */}
+                  <button className="absolute top-2 right-2 w-8 h-8 bg-black/50 rounded-full flex items-center justify-center text-white hover:bg-black/70 transition-colors">
+                    <Heart className="w-4 h-4" />
+                  </button>
+                  
+                  {/* Navigation arrows */}
+                  {canGoToPrevImage && (
+                    <button
+                      onClick={() => setPreviewImageIndex((prev) => prev - 1)}
+                      className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 bg-black/50 rounded-full flex items-center justify-center text-white hover:bg-black/70 transition-colors"
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                    </button>
+                  )}
+                  {canGoToNextImage && (
+                    <button
+                      onClick={() => setPreviewImageIndex((prev) => prev + 1)}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 bg-black/50 rounded-full flex items-center justify-center text-white hover:bg-black/70 transition-colors"
+                    >
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                  )}
+                </>
+              ) : (
+                <div className="w-full h-full flex items-center justify-center text-muted-foreground">
+                  <Camera className="w-12 h-12" />
+                </div>
+              )}
             </div>
 
             {/* Venue Info */}
@@ -395,103 +713,108 @@ export default function AddVenue() {
               <div className="flex items-start justify-between">
                 <div>
                   <h2 className="text-xl font-bold text-foreground">
-                    {formData.name || "Creative Studio Downtown"}
+                    {formData.name || "Venue Name"}
                   </h2>
-                  <p className="text-sm text-muted-foreground">
-                    {formData.category || "Photography Studio"}
+                  <p className="text-sm text-muted-foreground capitalize">
+                    {formData.category || "Category"}
                   </p>
                 </div>
-                <div className="flex items-center gap-1">
-                  <Star className="w-4 h-4 text-warning fill-warning" />
-                  <span className="font-semibold">New</span>
+                <div className="flex items-center gap-1 bg-primary/10 px-2 py-1 rounded-full">
+                  <Star className="w-3.5 h-3.5 text-primary fill-primary" />
+                  <span className="text-xs font-medium text-primary">New</span>
                 </div>
               </div>
 
               <div className="flex items-center gap-1 text-sm text-muted-foreground">
                 <MapPin className="w-4 h-4" />
-                <span>{formData.city || "Downtown"}, {formData.country || "NYC"}</span>
+                <span>
+                  {formData.city || "City"}
+                  {formData.country && `, ${countries.find(c => c.value === formData.country)?.label || formData.country}`}
+                </span>
               </div>
 
               <div className="flex items-center gap-2">
                 <span className="text-2xl font-bold text-success">
-                  ${formData.pricePerHour || "85"}
+                  ₹{formData.pricePerHour || "0"}
                 </span>
                 <span className="text-muted-foreground">/hour</span>
               </div>
             </div>
 
-            {/* Amenities Grid */}
-            <div>
-              <h3 className="font-semibold text-foreground mb-2">Amenities</h3>
-              <div className="flex flex-wrap gap-2">
-                {(formData.selectedAmenities.length > 0 ? formData.selectedAmenities : ["wifi", "parking", "coffee"]).map((id) => {
-                  const amenity = amenities.find((a) => a.id === id);
-                  if (!amenity) return null;
-                  const Icon = amenity.icon;
-                  return (
-                    <div key={id} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-muted text-sm">
-                      <Icon className="w-3.5 h-3.5" />
-                      <span>{amenity.label}</span>
-                    </div>
-                  );
-                })}
+            {/* What this place offers */}
+            {formData.selectedAmenities.length > 0 && (
+              <div>
+                <h3 className="font-semibold text-foreground mb-2">What this place offers</h3>
+                <div className="grid grid-cols-2 gap-2">
+                  {formData.selectedAmenities.map((id) => {
+                    const amenity = amenities.find((a) => a.id === id);
+                    if (!amenity) return null;
+                    const Icon = amenity.icon;
+                    return (
+                      <div key={id} className="flex items-center gap-2 py-2">
+                        <Icon className="w-4 h-4 text-muted-foreground" />
+                        <span className="text-sm">{amenity.label}</span>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
+            )}
 
             {/* About */}
-            <div>
-              <h3 className="font-semibold text-foreground mb-2">About</h3>
-              <p className="text-sm text-muted-foreground">
-                {formData.description || "A beautiful creative space perfect for photography shoots, small events, and creative workshops. Natural lighting throughout the day with professional equipment available."}
-              </p>
-            </div>
-
-            {/* Availability Slots Preview */}
-            <div>
-              <h3 className="font-semibold text-foreground mb-2">Available Times</h3>
-              <div className="flex gap-2 overflow-x-auto pb-2 -mx-4 px-4">
-                {["9:00 AM", "10:00 AM", "11:00 AM", "2:00 PM", "3:00 PM", "4:00 PM"].map((time) => (
-                  <button
-                    key={time}
-                    className="flex-shrink-0 px-4 py-2 rounded-lg border border-border bg-card text-sm font-medium hover:border-primary transition-colors"
-                  >
-                    {time}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Reviews Preview */}
-            <div>
-              <h3 className="font-semibold text-foreground mb-2">Reviews</h3>
-              <div className="card-elevated p-4">
-                <p className="text-sm text-muted-foreground italic text-center py-4">
-                  Reviews will appear here once your venue is published
+            {formData.description && (
+              <div>
+                <h3 className="font-semibold text-foreground mb-2">About this venue</h3>
+                <p className="text-sm text-muted-foreground">
+                  {formData.description}
                 </p>
+              </div>
+            )}
+
+            {/* Opening Hours Preview */}
+            <div>
+              <h3 className="font-semibold text-foreground mb-2">Opening Hours</h3>
+              <div className="space-y-1">
+                {formData.schedule.filter(s => s.enabled).map((day) => (
+                  <div key={day.day} className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">{day.fullDay}</span>
+                    <span className="font-medium">{day.open} - {day.close}</span>
+                  </div>
+                ))}
               </div>
             </div>
           </div>
         )}
 
         {/* Navigation Buttons */}
-        <div className="flex gap-3 mt-8">
-          <Button
-            variant="outline"
-            onClick={handleBack}
-            className="flex-1"
-          >
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            Back
-          </Button>
-          {currentStep < 4 ? (
-            <Button onClick={handleNext} className="flex-1">
-              Next Step
-              <ArrowRight className="w-4 h-4 ml-2" />
-            </Button>
+        <div className="mt-8 space-y-3">
+          {currentStep === 4 ? (
+            <>
+              <Button
+                onClick={handlePublish}
+                className="w-full bg-success hover:bg-success/90 text-white"
+                disabled={isPublishing}
+              >
+                {isPublishing ? (
+                  "Publishing..."
+                ) : (
+                  <>
+                    <Check className="w-4 h-4 mr-2" />
+                    Publish Listing
+                  </>
+                )}
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => setCurrentStep(1)}
+                className="w-full"
+              >
+                Edit Listing
+              </Button>
+            </>
           ) : (
-            <Button onClick={handlePublish} className="flex-1 bg-success hover:bg-success/90">
-              <Check className="w-4 h-4 mr-2" />
-              Publish Listing
+            <Button onClick={handleNext} className="w-full">
+              Next Step
             </Button>
           )}
         </div>
