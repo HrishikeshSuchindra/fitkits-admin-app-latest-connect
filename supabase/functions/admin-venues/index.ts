@@ -122,7 +122,7 @@ Deno.serve(async (req) => {
         category: body.category || "courts",
         sport: body.sport || null,
         address: body.address || "",
-        location: body.city || "",
+        city: body.city || "",
         price_per_hour: body.price_per_hour || 0,
         image_url: body.image_url || null,
         gallery_urls: body.gallery_urls || [],
@@ -197,7 +197,7 @@ Deno.serve(async (req) => {
       if (body.category !== undefined) updateData.category = body.category;
       if (body.sport !== undefined) updateData.sport = body.sport;
       if (body.address !== undefined) updateData.address = body.address;
-      if (body.city !== undefined) updateData.location = body.city;
+      if (body.city !== undefined) updateData.city = body.city;
       if (body.price_per_hour !== undefined) updateData.price_per_hour = body.price_per_hour;
       if (body.image_url !== undefined) updateData.image_url = body.image_url;
       if (body.gallery_urls !== undefined) updateData.gallery_urls = body.gallery_urls;
