@@ -551,6 +551,8 @@ export const edgeFunctionApi = {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session?.user) throw new Error('Not authenticated');
 
+    const userId = session.user.id;
+
     // Calculate date range
     const days = parseInt(period) || 30;
     const startDate = new Date();
@@ -562,26 +564,49 @@ export const edgeFunctionApi = {
     prevStartDate.setDate(prevStartDate.getDate() - days);
     const prevStartDateStr = prevStartDate.toISOString().split('T')[0];
 
-    // Get all active venues
-    const { data: venues, count: activeVenuesCount } = await supabase
+    // Get venues owned by the logged-in user
+    const { data: userVenues, count: activeVenuesCount } = await supabase
       .from('venues')
       .select('id', { count: 'exact' })
+      .eq('owner_id', userId)
       .eq('is_active', true);
 
-    const venueIds = venues?.map(v => v.id) || [];
+    const venueIds = userVenues?.map(v => v.id) || [];
+
+    // If user owns no venues, return zeros
+    if (venueIds.length === 0) {
+      if (type === 'overview') {
+        return {
+          overview: {
+            totalRevenue: 0,
+            totalBookings: 0,
+            totalUsers: 0,
+            activeVenues: 0,
+            revenueGrowth: 0,
+            bookingGrowth: 0,
+            userGrowth: 0,
+          }
+        };
+      }
+      if (type === 'revenue') return { revenue: [] };
+      if (type === 'bookings') return { bookings: [] };
+      return {};
+    }
 
     if (type === 'overview') {
-      // Get current period bookings (not cancelled) with user and price info
+      // Get current period bookings for user's venues only (not cancelled)
       const { data: currentBookings } = await supabase
         .from('bookings')
-        .select('id, user_id, price, total_amount, slot_date, booking_date')
+        .select('id, user_id, price, total_amount, slot_date, booking_date, venue_id')
+        .in('venue_id', venueIds)
         .neq('status', 'cancelled')
         .gte('slot_date', startDateStr);
 
       // Get previous period bookings for growth comparison
       const { data: prevBookings } = await supabase
         .from('bookings')
-        .select('id, user_id, price, total_amount')
+        .select('id, user_id, price, total_amount, venue_id')
+        .in('venue_id', venueIds)
         .neq('status', 'cancelled')
         .gte('slot_date', prevStartDateStr)
         .lt('slot_date', startDateStr);
@@ -615,10 +640,11 @@ export const edgeFunctionApi = {
     }
 
     if (type === 'revenue') {
-      // Get daily revenue for the period (non-cancelled bookings)
+      // Get daily revenue for the period (non-cancelled bookings) for user's venues only
       const { data } = await supabase
         .from('bookings')
-        .select('price, total_amount, slot_date, booking_date')
+        .select('price, total_amount, slot_date, booking_date, venue_id')
+        .in('venue_id', venueIds)
         .neq('status', 'cancelled')
         .gte('slot_date', startDateStr)
         .order('slot_date', { ascending: true });
@@ -639,10 +665,11 @@ export const edgeFunctionApi = {
     }
 
     if (type === 'bookings') {
-      // Get daily booking counts for the period (non-cancelled)
+      // Get daily booking counts for the period (non-cancelled) for user's venues only
       const { data } = await supabase
         .from('bookings')
-        .select('slot_date, booking_date')
+        .select('slot_date, booking_date, venue_id')
+        .in('venue_id', venueIds)
         .neq('status', 'cancelled')
         .gte('slot_date', startDateStr)
         .order('slot_date', { ascending: true });
