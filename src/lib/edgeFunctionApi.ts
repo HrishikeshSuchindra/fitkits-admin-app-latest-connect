@@ -242,8 +242,8 @@ export const edgeFunctionApi = {
     if (!session?.user) throw new Error('Not authenticated');
 
     const { data, error } = await supabase.functions.invoke('admin-bookings', {
-      method: 'GET',
-      body: params,
+      method: 'POST',
+      body: { ...params, action: 'get_bookings' },
     });
 
     if (error) {
@@ -305,8 +305,8 @@ export const edgeFunctionApi = {
     if (!session?.user) throw new Error('Not authenticated');
 
     const { data, error } = await supabase.functions.invoke('admin-slot-blocks', {
-      method: 'GET',
-      body: params,
+      method: 'POST',
+      body: { ...params, action: 'get_blocked_slots' },
     });
 
     if (error) {
@@ -396,7 +396,7 @@ export const edgeFunctionApi = {
     if (!session?.user) throw new Error('Not authenticated');
 
     const { data, error } = await supabase.functions.invoke('admin-slot-blocks', {
-      method: 'GET',
+      method: 'POST',
       body: {
         action: 'slot_availability',
         venue_id: params.venue_id,
@@ -426,8 +426,9 @@ export const edgeFunctionApi = {
     const endDate = `${params.year}-${String(params.month).padStart(2, '0')}-${lastDay}`;
 
     const { data, error } = await supabase.functions.invoke('admin-slot-blocks', {
-      method: 'GET',
+      method: 'POST',
       body: {
+        action: 'get_blocked_days',
         venue_id: params.venue_id,
         date_from: startDate,
         date_to: endDate,
@@ -460,8 +461,9 @@ export const edgeFunctionApi = {
     const endDate = `${params.year}-${String(params.month).padStart(2, '0')}-${lastDay}`;
 
     const { data, error } = await supabase.functions.invoke('admin-bookings', {
-      method: 'GET',
+      method: 'POST',
       body: {
+        action: 'get_booked_days',
         venue_id: params.venue_id,
         date_from: startDate,
         date_to: endDate,
