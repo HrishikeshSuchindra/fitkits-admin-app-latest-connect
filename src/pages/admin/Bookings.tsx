@@ -279,44 +279,43 @@ export default function BookingsPage() {
                 <CardContent className="p-4">
                   <div className="flex items-start gap-3">
                     {/* User Avatar */}
-                    <Avatar className="h-12 w-12 shrink-0">
+                    <Avatar className="h-10 w-10 shrink-0">
                       <AvatarImage src={getUserAvatar(booking)} alt={getUserName(booking)} />
-                      <AvatarFallback className="bg-primary/10 text-primary font-medium">
+                      <AvatarFallback className="bg-primary/10 text-primary font-medium text-sm">
                         {getUserInitials(booking)}
                       </AvatarFallback>
                     </Avatar>
 
                     {/* Booking Details */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-start justify-between gap-2">
-                        <div>
-                          <h3 className="font-semibold text-foreground truncate">
-                            {getUserName(booking)}
-                          </h3>
-                          <div className="flex items-center gap-1.5 text-sm text-muted-foreground mt-0.5">
-                            <MapPin className="h-3.5 w-3.5" />
-                            <span className="truncate">{getVenueName(booking)}</span>
-                            {booking.court_number && (
-                              <span className="text-xs">• Court {booking.court_number}</span>
-                            )}
-                          </div>
-                        </div>
-                        <span className={`px-2 py-0.5 text-xs font-medium rounded-full shrink-0 ${getStatusColor(booking.status)}`}>
+                    <div className="flex-1 min-w-0 overflow-hidden">
+                      <div className="flex items-center justify-between gap-2 mb-1">
+                        <h3 className="font-semibold text-foreground text-sm truncate">
+                          {getUserName(booking)}
+                        </h3>
+                        <span className={`px-2 py-0.5 text-xs font-medium rounded-full shrink-0 whitespace-nowrap ${getStatusColor(booking.status)}`}>
                           {booking.status}
                         </span>
                       </div>
 
+                      <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                        <MapPin className="h-3.5 w-3.5 shrink-0" />
+                        <span className="truncate">{getVenueName(booking)}</span>
+                        {booking.court_number && (
+                          <span className="text-xs shrink-0">• Court {booking.court_number}</span>
+                        )}
+                      </div>
+
                       {/* Players & Time */}
-                      <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
+                      <div className="flex items-center gap-3 mt-1 text-sm text-muted-foreground">
                         {booking.player_count && (
                           <div className="flex items-center gap-1">
-                            <Users className="h-3.5 w-3.5" />
+                            <Users className="h-3.5 w-3.5 shrink-0" />
                             <span>{booking.player_count} players</span>
                           </div>
                         )}
                         <div className="flex items-center gap-1">
-                          <Clock className="h-3.5 w-3.5" />
-                          <span>{getBookingTime(booking)}</span>
+                          <Clock className="h-3.5 w-3.5 shrink-0" />
+                          <span className="whitespace-nowrap">{getBookingTime(booking)}</span>
                         </div>
                       </div>
 
