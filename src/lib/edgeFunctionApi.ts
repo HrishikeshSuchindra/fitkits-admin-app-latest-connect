@@ -46,16 +46,39 @@ export interface Booking {
   id: string;
   user_id: string;
   venue_id: string;
-  booking_date: string;
-  start_time: string;
-  end_time: string;
-  total_amount: number;
+  // Backend field names (may differ from legacy)
+  slot_date?: string;
+  slot_time?: string;
+  duration_minutes?: number;
+  price?: number;
+  // Legacy field names (some backends may use these)
+  booking_date?: string;
+  start_time?: string;
+  end_time?: string;
+  total_amount?: number;
+  // Common fields
   status: string;
   created_at: string;
+  court_number?: number;
+  player_count?: number;
+  cancelled_at?: string;
+  cancellation_reason?: string;
+  // Nested objects from backend (newer format)
+  venue_name?: string;
+  venue_address?: string;
+  venue_image?: string;
+  user_profile?: {
+    user_id: string;
+    display_name: string;
+    username?: string;
+    avatar_url?: string;
+  };
+  // Legacy nested format
   user?: {
     full_name: string | null;
     email: string;
     phone: string | null;
+    avatar_url?: string;
   };
   venue?: {
     name: string;
@@ -473,7 +496,7 @@ export const edgeFunctionApi = {
       page: 1,
     });
 
-    const uniqueDates = [...new Set(bookings.map((b: any) => b.booking_date))] as string[];
+    const uniqueDates = [...new Set(bookings.map((b: any) => b.slot_date || b.booking_date))] as string[];
     
     return { dates: uniqueDates };
   },
