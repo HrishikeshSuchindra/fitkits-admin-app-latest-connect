@@ -178,11 +178,13 @@ export default function BookingsPage() {
     }
   };
 
-  // Handle call action
+  // Handle call action - sanitize phone number for dialer
   const handleCall = (booking: Booking) => {
     const phone = getUserPhone(booking);
     if (phone) {
-      window.location.href = `tel:${phone}`;
+      // Remove spaces, dashes, parentheses but keep + for international format
+      const cleanPhone = phone.replace(/[\s\-\(\)]/g, '');
+      window.location.href = `tel:${cleanPhone}`;
     } else {
       toast.error('No phone number available for this user');
     }
