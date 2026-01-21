@@ -1,10 +1,9 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { edgeFunctionApi, Venue, SlotBlock } from '@/lib/edgeFunctionApi';
+import { edgeFunctionApi, Venue, SlotAvailability } from '@/lib/edgeFunctionApi';
 import { AdminLayout } from '@/components/layout/AdminLayout';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import {
   Select,
   SelectContent,
@@ -12,38 +11,43 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
 import { 
   Calendar as CalendarIcon,
-  Clock,
   Lock,
   Unlock,
   Loader2,
-  ChevronLeft,
-  ChevronRight,
-  AlertCircle
+  AlertCircle,
+  X
 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
-import { format, addDays, startOfWeek, isSameDay, parseISO } from 'date-fns';
+import { format, getMonth, getYear } from 'date-fns';
+import { AvailabilityCalendar } from '@/components/ui/AvailabilityCalendar';
+import { TimeSlotGrid } from '@/components/ui/TimeSlotGrid';
+import { BlockSlotDialog } from '@/components/ui/BlockSlotDialog';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { cn } from '@/lib/utils';
 
-// Generate time slots from opening to closing time
-function generateTimeSlots(openingTime: string = '07:00', closingTime: string = '21:00'): string[] {
+// Generate 30-minute time slots from opening to closing time
+function generate30MinSlots(openingTime: string = '07:00', closingTime: string = '21:00'): string[] {
   const slots: string[] = [];
-  const [openHour] = openingTime.split(':').map(Number);
-  const [closeHour] = closingTime.split(':').map(Number);
+  const [openHour, openMin] = openingTime.split(':').map(Number);
+  const [closeHour, closeMin] = closingTime.split(':').map(Number);
   
-  for (let hour = openHour; hour < closeHour; hour++) {
-    slots.push(`${hour.toString().padStart(2, '0')}:00`);
+  let currentHour = openHour;
+  let currentMin = openMin || 0;
+  
+  const closeTimeMinutes = closeHour * 60 + (closeMin || 0);
+  
+  while (currentHour * 60 + currentMin < closeTimeMinutes) {
+    slots.push(`${currentHour.toString().padStart(2, '0')}:${currentMin.toString().padStart(2, '0')}`);
+    currentMin += 30;
+    if (currentMin >= 60) {
+      currentMin = 0;
+      currentHour++;
+    }
   }
   
   return slots;
@@ -51,15 +55,12 @@ function generateTimeSlots(openingTime: string = '07:00', closingTime: string = 
 
 export default function SlotBlocksPage() {
   const [selectedVenueId, setSelectedVenueId] = useState<string>('');
-  const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date(), { weekStartsOn: 1 }));
-  const [blockDialog, setBlockDialog] = useState<{
-    open: boolean;
-    date: string;
-    time: string;
-    isBlocked: boolean;
-    blockId?: string;
-  }>({ open: false, date: '', time: '', isBlocked: false });
+  const [currentMonth, setCurrentMonth] = useState(new Date());
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+  const [selectedSlots, setSelectedSlots] = useState<string[]>([]);
+  const [blockMode, setBlockMode] = useState<'time' | 'fullDay'>('time');
   const [blockReason, setBlockReason] = useState('');
+  const [showBlockDialog, setShowBlockDialog] = useState(false);
 
   const queryClient = useQueryClient();
 
@@ -72,115 +73,177 @@ export default function SlotBlocksPage() {
   const venues = venuesData?.venues || [];
   const selectedVenue = venues.find(v => v.id === selectedVenueId);
 
-  // Auto-select first venue
-  useState(() => {
+  // Auto-select first venue when data loads
+  useEffect(() => {
     if (venues.length > 0 && !selectedVenueId) {
       setSelectedVenueId(venues[0].id);
     }
-  });
+  }, [venues, selectedVenueId]);
 
-  // Fetch blocked slots for selected venue
-  const { data: blocksData, isLoading: blocksLoading } = useQuery({
-    queryKey: ['slot-blocks', selectedVenueId, format(weekStart, 'yyyy-MM-dd')],
-    queryFn: () => edgeFunctionApi.getBlockedSlots({
+  // Fetch blocked days in current month
+  const { data: blockedDaysData, isLoading: blockedDaysLoading } = useQuery({
+    queryKey: ['blocked-days', selectedVenueId, getYear(currentMonth), getMonth(currentMonth) + 1],
+    queryFn: () => edgeFunctionApi.getBlockedDaysInMonth({
       venue_id: selectedVenueId,
-      date_from: format(weekStart, 'yyyy-MM-dd'),
-      date_to: format(addDays(weekStart, 6), 'yyyy-MM-dd'),
-      limit: 200,
+      year: getYear(currentMonth),
+      month: getMonth(currentMonth) + 1,
     }),
     enabled: !!selectedVenueId,
   });
 
-  const blocks = blocksData?.blocks || [];
+  const blockedDates = blockedDaysData?.dates || [];
 
-  // Block mutation
-  const blockMutation = useMutation({
-    mutationFn: ({ venueId, date, time, reason }: { venueId: string; date: string; time: string; reason: string }) =>
-      edgeFunctionApi.blockSlot(venueId, date, time, reason),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['slot-blocks'] });
-      toast.success('Slot blocked');
-      closeBlockDialog();
-    },
-    onError: (error: Error) => {
-      toast.error(error.message);
-    },
+  // Fetch booked days in current month
+  const { data: bookedDaysData, isLoading: bookedDaysLoading } = useQuery({
+    queryKey: ['booked-days', selectedVenueId, getYear(currentMonth), getMonth(currentMonth) + 1],
+    queryFn: () => edgeFunctionApi.getBookedDaysInMonth({
+      venue_id: selectedVenueId,
+      year: getYear(currentMonth),
+      month: getMonth(currentMonth) + 1,
+    }),
+    enabled: !!selectedVenueId,
   });
 
-  // Unblock mutation
-  const unblockMutation = useMutation({
-    mutationFn: ({ venueId, date, time }: { venueId: string; date: string; time: string }) =>
-      edgeFunctionApi.unblockSlot(venueId, date, time),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['slot-blocks'] });
-      toast.success('Slot unblocked');
-      closeBlockDialog();
-    },
-    onError: (error: Error) => {
-      toast.error(error.message);
-    },
+  const bookedDates = bookedDaysData?.dates || [];
+
+  // Fetch slot availability for selected date
+  const { data: slotAvailabilityData, isLoading: slotsLoading } = useQuery({
+    queryKey: ['slot-availability', selectedVenueId, selectedDate ? format(selectedDate, 'yyyy-MM-dd') : ''],
+    queryFn: () => edgeFunctionApi.getSlotAvailability({
+      venue_id: selectedVenueId,
+      date: format(selectedDate!, 'yyyy-MM-dd'),
+    }),
+    enabled: !!selectedVenueId && !!selectedDate,
   });
 
-  const closeBlockDialog = () => {
-    setBlockDialog({ open: false, date: '', time: '', isBlocked: false });
-    setBlockReason('');
-  };
-
-  const handleSlotClick = (date: string, time: string) => {
-    const block = blocks.find(b => b.slot_date === date && b.slot_time === time);
-    setBlockDialog({
-      open: true,
-      date,
-      time,
-      isBlocked: !!block,
-      blockId: block?.id,
-    });
-    if (block?.reason) {
-      setBlockReason(block.reason);
-    }
-  };
-
-  const handleConfirmAction = () => {
-    if (blockDialog.isBlocked) {
-      unblockMutation.mutate({
-        venueId: selectedVenueId,
-        date: blockDialog.date,
-        time: blockDialog.time,
-      });
-    } else {
-      blockMutation.mutate({
-        venueId: selectedVenueId,
-        date: blockDialog.date,
-        time: blockDialog.time,
-        reason: blockReason || 'Blocked by admin',
-      });
-    }
-  };
-
-  const isActionLoading = blockMutation.isPending || unblockMutation.isPending;
-
-  // Generate week days
-  const weekDays = useMemo(() => {
-    return Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
-  }, [weekStart]);
-
-  // Generate time slots based on venue hours
+  // Generate slots based on venue hours, merge with availability data
   const timeSlots = useMemo(() => {
-    return generateTimeSlots(
+    const generatedSlots = generate30MinSlots(
       selectedVenue?.opening_time || '07:00',
       selectedVenue?.closing_time || '21:00'
     );
-  }, [selectedVenue]);
 
-  // Check if a slot is blocked
-  const isSlotBlocked = (date: string, time: string): boolean => {
-    return blocks.some(b => b.slot_date === date && b.slot_time === time);
+    const availabilityMap = new Map(
+      (slotAvailabilityData?.slots || []).map(s => [s.time, s])
+    );
+
+    return generatedSlots.map(time => {
+      const existing = availabilityMap.get(time);
+      return existing || {
+        time,
+        booked_courts: 0,
+        is_blocked: false,
+      };
+    });
+  }, [selectedVenue, slotAvailabilityData]);
+
+  // Block multiple slots mutation
+  const blockSlotsMutation = useMutation({
+    mutationFn: async ({ slots, reason }: { slots: string[]; reason: string }) => {
+      const dateStr = format(selectedDate!, 'yyyy-MM-dd');
+      return edgeFunctionApi.blockMultipleSlots(
+        slots.map(time => ({
+          venue_id: selectedVenueId,
+          slot_date: dateStr,
+          slot_time: time,
+          reason: reason || 'Blocked by admin',
+        }))
+      );
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['slot-availability'] });
+      queryClient.invalidateQueries({ queryKey: ['blocked-days'] });
+      toast.success(`${selectedSlots.length} slot(s) blocked`);
+      handleCloseBlockDialog();
+    },
+    onError: (error: Error) => {
+      toast.error(error.message);
+    },
+  });
+
+  // Block full day mutation
+  const blockFullDayMutation = useMutation({
+    mutationFn: async ({ reason }: { reason: string }) => {
+      const dateStr = format(selectedDate!, 'yyyy-MM-dd');
+      return edgeFunctionApi.blockFullDay(selectedVenueId, dateStr, reason);
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['slot-availability'] });
+      queryClient.invalidateQueries({ queryKey: ['blocked-days'] });
+      toast.success(`Full day blocked (${data.blocks_created} slots)`);
+      handleCloseBlockDialog();
+    },
+    onError: (error: Error) => {
+      toast.error(error.message);
+    },
+  });
+
+  // Unblock slot mutation
+  const unblockSlotMutation = useMutation({
+    mutationFn: async (time: string) => {
+      const dateStr = format(selectedDate!, 'yyyy-MM-dd');
+      return edgeFunctionApi.unblockSlot(selectedVenueId, dateStr, time);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['slot-availability'] });
+      queryClient.invalidateQueries({ queryKey: ['blocked-days'] });
+      toast.success('Slot unblocked');
+    },
+    onError: (error: Error) => {
+      toast.error(error.message);
+    },
+  });
+
+  const handleDateSelect = (date: Date) => {
+    setSelectedDate(date);
+    setSelectedSlots([]);
+    setBlockMode('time');
   };
 
-  // Auto-select first venue when data loads
-  if (venues.length > 0 && !selectedVenueId) {
-    setSelectedVenueId(venues[0].id);
-  }
+  const handleSlotToggle = (time: string) => {
+    const slot = timeSlots.find(s => s.time === time);
+    
+    // If slot is blocked, unblock it
+    if (slot?.is_blocked) {
+      unblockSlotMutation.mutate(time);
+      return;
+    }
+
+    // Toggle selection for available slots
+    setSelectedSlots(prev => 
+      prev.includes(time)
+        ? prev.filter(t => t !== time)
+        : [...prev, time]
+    );
+  };
+
+  const handleOpenBlockDialog = () => {
+    if (blockMode === 'time' && selectedSlots.length === 0) {
+      toast.error('Please select at least one time slot');
+      return;
+    }
+    setShowBlockDialog(true);
+  };
+
+  const handleCloseBlockDialog = () => {
+    setShowBlockDialog(false);
+    setBlockReason('');
+    setSelectedSlots([]);
+  };
+
+  const handleConfirmBlock = () => {
+    if (blockMode === 'fullDay') {
+      blockFullDayMutation.mutate({ reason: blockReason });
+    } else {
+      blockSlotsMutation.mutate({ slots: selectedSlots, reason: blockReason });
+    }
+  };
+
+  const isActionLoading = blockSlotsMutation.isPending || blockFullDayMutation.isPending || unblockSlotMutation.isPending;
+
+  // Count blocked and available slots for the selected date
+  const blockedCount = timeSlots.filter(s => s.is_blocked).length;
+  const availableCount = timeSlots.length - blockedCount;
 
   return (
     <AdminLayout title="Slot Blocks">
@@ -213,185 +276,199 @@ export default function SlotBlocksPage() {
           </CardContent>
         </Card>
 
-        {/* Week Navigation */}
+        {/* Availability Calendar */}
         {selectedVenueId && (
+          <AvailabilityCalendar
+            selectedDate={selectedDate}
+            onDateSelect={handleDateSelect}
+            currentMonth={currentMonth}
+            onMonthChange={setCurrentMonth}
+            blockedDates={blockedDates}
+            bookedDates={bookedDates}
+            className="card-elevated"
+          />
+        )}
+
+        {/* Block Slot Card */}
+        {selectedVenueId && selectedDate && (
           <Card className="card-elevated">
-            <CardContent className="p-4">
+            <CardHeader className="pb-2">
               <div className="flex items-center justify-between">
+                <CardTitle className="text-lg font-semibold flex items-center gap-2">
+                  <CalendarIcon className="h-5 w-5 text-primary" />
+                  {format(selectedDate, 'EEEE, d MMMM yyyy')}
+                </CardTitle>
                 <Button
                   variant="ghost"
                   size="icon"
-                  onClick={() => setWeekStart(prev => addDays(prev, -7))}
+                  className="h-8 w-8"
+                  onClick={() => setSelectedDate(null)}
                 >
-                  <ChevronLeft className="h-5 w-5" />
+                  <X className="h-4 w-4" />
                 </Button>
-                <div className="text-center">
-                  <p className="font-semibold text-foreground">
-                    {format(weekStart, 'MMM d')} - {format(addDays(weekStart, 6), 'MMM d, yyyy')}
-                  </p>
-                  <p className="text-xs text-muted-foreground">Click on a slot to block/unblock</p>
-                </div>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => setWeekStart(prev => addDays(prev, 7))}
+              </div>
+              <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                <span className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-success" />
+                  {availableCount} available
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <Lock className="h-3 w-3 text-destructive" />
+                  {blockedCount} blocked
+                </span>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* Block Mode Toggle */}
+              <div className="space-y-2">
+                <Label className="text-sm text-muted-foreground">Block Type</Label>
+                <ToggleGroup
+                  type="single"
+                  value={blockMode}
+                  onValueChange={(value) => {
+                    if (value) {
+                      setBlockMode(value as 'time' | 'fullDay');
+                      if (value === 'fullDay') {
+                        setSelectedSlots([]);
+                      }
+                    }
+                  }}
+                  className="justify-start"
                 >
-                  <ChevronRight className="h-5 w-5" />
+                  <ToggleGroupItem
+                    value="time"
+                    className={cn(
+                      'px-4 rounded-xl',
+                      blockMode === 'time' && 'bg-primary text-primary-foreground data-[state=on]:bg-primary data-[state=on]:text-primary-foreground'
+                    )}
+                  >
+                    Block Time
+                  </ToggleGroupItem>
+                  <ToggleGroupItem
+                    value="fullDay"
+                    className={cn(
+                      'px-4 rounded-xl',
+                      blockMode === 'fullDay' && 'bg-primary text-primary-foreground data-[state=on]:bg-primary data-[state=on]:text-primary-foreground'
+                    )}
+                  >
+                    Full Day
+                  </ToggleGroupItem>
+                </ToggleGroup>
+              </div>
+
+              {/* Time Slot Grid */}
+              {blockMode === 'time' && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-sm text-muted-foreground">
+                      Select slots to block (tap blocked slots to unblock)
+                    </Label>
+                    {selectedSlots.length > 0 && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setSelectedSlots([])}
+                        className="h-7 text-xs"
+                      >
+                        Clear selection
+                      </Button>
+                    )}
+                  </div>
+                  <TimeSlotGrid
+                    slots={timeSlots}
+                    selectedSlots={selectedSlots}
+                    onSlotToggle={handleSlotToggle}
+                    maxCourts={selectedVenue?.courts_count || 3}
+                    isLoading={slotsLoading}
+                  />
+                </div>
+              )}
+
+              {/* Full Day Warning */}
+              {blockMode === 'fullDay' && (
+                <div className="p-4 bg-warning/10 border border-warning/30 rounded-xl">
+                  <p className="text-sm text-warning font-medium">
+                    This will block all {timeSlots.length} time slots for the entire day.
+                  </p>
+                  <p className="text-xs text-warning/80 mt-1">
+                    Existing bookings will not be affected, but no new bookings can be made.
+                  </p>
+                </div>
+              )}
+
+              {/* Reason Input */}
+              <div className="space-y-2">
+                <Label htmlFor="block-reason">Reason (optional)</Label>
+                <Input
+                  id="block-reason"
+                  value={blockReason}
+                  onChange={(e) => setBlockReason(e.target.value)}
+                  placeholder="e.g., Private Tournament, Maintenance..."
+                  className="rounded-xl"
+                />
+                <p className="text-xs text-muted-foreground">
+                  This will be shown on blocked slots
+                </p>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex gap-2 pt-2">
+                <Button
+                  variant="outline"
+                  className="flex-1 rounded-xl"
+                  onClick={() => {
+                    setSelectedSlots([]);
+                    setBlockReason('');
+                  }}
+                  disabled={isActionLoading}
+                >
+                  Reset
+                </Button>
+                <Button
+                  variant="destructive"
+                  className="flex-1 rounded-xl"
+                  onClick={handleOpenBlockDialog}
+                  disabled={isActionLoading || (blockMode === 'time' && selectedSlots.length === 0)}
+                >
+                  {isActionLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  <Lock className="h-4 w-4 mr-1" />
+                  {blockMode === 'fullDay' 
+                    ? 'Block Full Day' 
+                    : `Block ${selectedSlots.length} Slot${selectedSlots.length !== 1 ? 's' : ''}`
+                  }
                 </Button>
               </div>
             </CardContent>
           </Card>
         )}
 
-        {/* Calendar Grid */}
-        {selectedVenueId && (
-          <Card className="card-elevated overflow-hidden">
-            <CardContent className="p-0">
-              {blocksLoading ? (
-                <div className="p-8 text-center">
-                  <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
-                  <p className="text-muted-foreground mt-2">Loading slots...</p>
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full min-w-[600px]">
-                    <thead>
-                      <tr className="border-b">
-                        <th className="p-2 text-left text-xs font-medium text-muted-foreground w-16">
-                          <Clock className="h-4 w-4" />
-                        </th>
-                        {weekDays.map((day) => (
-                          <th key={day.toISOString()} className="p-2 text-center">
-                            <p className="text-xs font-medium text-muted-foreground">
-                              {format(day, 'EEE')}
-                            </p>
-                            <p className={`text-sm font-semibold ${isSameDay(day, new Date()) ? 'text-primary' : 'text-foreground'}`}>
-                              {format(day, 'd')}
-                            </p>
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {timeSlots.map((time) => (
-                        <tr key={time} className="border-b last:border-0">
-                          <td className="p-2 text-xs text-muted-foreground font-medium">
-                            {time}
-                          </td>
-                          {weekDays.map((day) => {
-                            const dateStr = format(day, 'yyyy-MM-dd');
-                            const blocked = isSlotBlocked(dateStr, time);
-                            const isPast = day < new Date() && !isSameDay(day, new Date());
-                            
-                            return (
-                              <td key={`${dateStr}-${time}`} className="p-1">
-                                <button
-                                  onClick={() => !isPast && handleSlotClick(dateStr, time)}
-                                  disabled={isPast}
-                                  className={`w-full h-10 rounded-lg flex items-center justify-center transition-colors ${
-                                    isPast
-                                      ? 'bg-muted/30 cursor-not-allowed'
-                                      : blocked
-                                      ? 'bg-destructive/10 hover:bg-destructive/20 border border-destructive/30'
-                                      : 'bg-success/10 hover:bg-success/20 border border-success/30'
-                                  }`}
-                                >
-                                  {blocked ? (
-                                    <Lock className="h-4 w-4 text-destructive" />
-                                  ) : !isPast ? (
-                                    <span className="w-2 h-2 rounded-full bg-success" />
-                                  ) : null}
-                                </button>
-                              </td>
-                            );
-                          })}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+        {/* Instructions when no date selected */}
+        {selectedVenueId && !selectedDate && (
+          <Card className="card-elevated">
+            <CardContent className="py-8 text-center">
+              <CalendarIcon className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
+              <h3 className="font-medium text-foreground mb-2">Select a Date</h3>
+              <p className="text-sm text-muted-foreground">
+                Tap on a date in the calendar above to view and manage time slots
+              </p>
             </CardContent>
           </Card>
         )}
-
-        {/* Legend */}
-        {selectedVenueId && (
-          <div className="flex items-center justify-center gap-6 text-sm">
-            <div className="flex items-center gap-2">
-              <span className="w-3 h-3 rounded-full bg-success" />
-              <span className="text-muted-foreground">Available</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Lock className="h-3 w-3 text-destructive" />
-              <span className="text-muted-foreground">Blocked</span>
-            </div>
-          </div>
-        )}
       </div>
 
-      {/* Block/Unblock Dialog */}
-      <Dialog open={blockDialog.open} onOpenChange={(open) => !open && closeBlockDialog()}>
-        <DialogContent className="mx-4 rounded-2xl">
-          <DialogHeader>
-            <DialogTitle>
-              {blockDialog.isBlocked ? 'Unblock Slot' : 'Block Slot'}
-            </DialogTitle>
-            <DialogDescription>
-              {blockDialog.date && blockDialog.time && (
-                <>
-                  {format(parseISO(blockDialog.date), 'EEEE, MMMM d, yyyy')} at {blockDialog.time}
-                </>
-              )}
-            </DialogDescription>
-          </DialogHeader>
-
-          {!blockDialog.isBlocked && (
-            <div className="space-y-2">
-              <Label>Reason (optional)</Label>
-              <Input
-                value={blockReason}
-                onChange={(e) => setBlockReason(e.target.value)}
-                placeholder="e.g., Maintenance, Private Event"
-                className="rounded-xl"
-              />
-            </div>
-          )}
-
-          {blockDialog.isBlocked && blockReason && (
-            <div className="p-3 bg-muted rounded-xl">
-              <p className="text-sm text-muted-foreground">
-                <span className="font-medium">Blocked reason:</span> {blockReason}
-              </p>
-            </div>
-          )}
-
-          <DialogFooter className="flex-row gap-2">
-            <Button variant="outline" onClick={closeBlockDialog} className="flex-1 rounded-xl">
-              Cancel
-            </Button>
-            <Button 
-              onClick={handleConfirmAction}
-              disabled={isActionLoading}
-              variant={blockDialog.isBlocked ? 'default' : 'destructive'}
-              className="flex-1 rounded-xl"
-            >
-              {isActionLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {blockDialog.isBlocked ? (
-                <>
-                  <Unlock className="h-4 w-4 mr-1" />
-                  Unblock
-                </>
-              ) : (
-                <>
-                  <Lock className="h-4 w-4 mr-1" />
-                  Block
-                </>
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Block Confirmation Dialog */}
+      <BlockSlotDialog
+        open={showBlockDialog}
+        onOpenChange={setShowBlockDialog}
+        selectedDate={selectedDate}
+        selectedSlots={selectedSlots}
+        blockMode={blockMode}
+        onBlockModeChange={setBlockMode}
+        reason={blockReason}
+        onReasonChange={setBlockReason}
+        onConfirm={handleConfirmBlock}
+        isLoading={blockSlotsMutation.isPending || blockFullDayMutation.isPending}
+      />
     </AdminLayout>
   );
 }
