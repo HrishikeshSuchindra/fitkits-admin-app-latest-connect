@@ -222,7 +222,9 @@ export const edgeFunctionApi = {
     return { venue: { ...venueData, location: venueData.city || venueData.location } as Venue };
   },
 
-  async updateVenue(venueId: string, updates: Partial<Venue>): Promise<{ venue: Venue }> {
+  async updateVenue(venueId: string, updates: Partial<Venue> & {
+    day_schedules?: Record<string, { enabled: boolean; open: string; close: string }>;
+  }): Promise<{ venue: Venue }> {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session?.user) throw new Error('Not authenticated');
 
@@ -242,15 +244,26 @@ export const edgeFunctionApi = {
     if (updates.closing_time !== undefined) updateData.closing_time = updates.closing_time;
     if (updates.description !== undefined) updateData.description = updates.description;
     if (updates.courts_count !== undefined) updateData.courts_count = updates.courts_count;
+    if (updates.min_booking_duration !== undefined) updateData.min_booking_duration = updates.min_booking_duration;
+    if (updates.day_schedules !== undefined) updateData.day_schedules = updates.day_schedules;
 
     const { data, error } = await supabase.functions.invoke('admin-venues', {
       method: 'PATCH',
       body: updateData,
     });
 
+    // Enhanced error handling - extract detailed error from response
     if (error) {
       console.error('Update venue error:', error);
-      throw new Error(error.message);
+      // Try to get more details from the data if available
+      const errorDetails = data?.details || data?.error || error.message;
+      throw new Error(errorDetails);
+    }
+
+    // Check if the response itself contains an error (edge function returned 500 with JSON body)
+    if (data?.error) {
+      console.error('Backend error:', data);
+      throw new Error(data.details || data.error);
     }
 
     const venueData = data?.venue || data;

@@ -40,6 +40,8 @@ interface VenueUpdate {
   opening_time?: string;
   closing_time?: string;
   courts_count?: number;
+  day_schedules?: Record<string, { enabled: boolean; open: string; close: string }>;
+  min_booking_duration?: number;
 }
 
 Deno.serve(async (req) => {
@@ -207,6 +209,16 @@ Deno.serve(async (req) => {
       if (body.opening_time !== undefined) updateData.opening_time = body.opening_time;
       if (body.closing_time !== undefined) updateData.closing_time = body.closing_time;
       if (body.courts_count !== undefined) updateData.total_courts = body.courts_count;
+      if (body.day_schedules !== undefined) updateData.day_schedules = body.day_schedules;
+      if (body.min_booking_duration !== undefined) updateData.min_booking_duration = body.min_booking_duration;
+
+      // Guard: return 400 if no updatable fields provided
+      if (Object.keys(updateData).length === 0) {
+        return new Response(
+          JSON.stringify({ error: "No fields to update" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
 
       const { data: venue, error } = await supabase
         .from("venues")
