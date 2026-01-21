@@ -131,7 +131,7 @@ Deno.serve(async (req) => {
         description: body.description || "",
         opening_hours: body.opening_hours || null,
         min_booking_duration: body.min_booking_duration || 60,
-        courts_count: body.courts_count || 1,
+        total_courts: body.courts_count || 1,
         owner_id: user.id,
       };
 
@@ -206,7 +206,7 @@ Deno.serve(async (req) => {
       if (body.description !== undefined) updateData.description = body.description;
       if (body.opening_time !== undefined) updateData.opening_time = body.opening_time;
       if (body.closing_time !== undefined) updateData.closing_time = body.closing_time;
-      if (body.courts_count !== undefined) updateData.courts_count = body.courts_count;
+      if (body.courts_count !== undefined) updateData.total_courts = body.courts_count;
 
       const { data: venue, error } = await supabase
         .from("venues")
