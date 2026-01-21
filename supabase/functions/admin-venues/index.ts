@@ -18,6 +18,10 @@ interface VenueCreate {
   is_active?: boolean;
   amenities?: string[];
   description?: string;
+  // Canonical DB fields
+  day_schedules?: Record<string, { enabled: boolean; open: string; close: string }>;
+  total_courts?: number;
+  // Legacy aliases still accepted by some clients
   opening_hours?: Record<string, { enabled: boolean; open: string; close: string }>;
   min_booking_duration?: number;
   courts_count?: number;
@@ -131,9 +135,10 @@ Deno.serve(async (req) => {
         is_active: body.is_active ?? true,
         amenities: body.amenities || [],
         description: body.description || "",
-        opening_hours: body.opening_hours || null,
+        // DB schema uses day_schedules (jsonb). Keep opening_hours as an alias.
+        day_schedules: body.day_schedules || body.opening_hours || null,
         min_booking_duration: body.min_booking_duration || 60,
-        total_courts: body.courts_count || 1,
+        total_courts: body.total_courts || body.courts_count || 1,
         owner_id: user.id,
       };
 
@@ -208,7 +213,9 @@ Deno.serve(async (req) => {
       if (body.description !== undefined) updateData.description = body.description;
       if (body.opening_time !== undefined) updateData.opening_time = body.opening_time;
       if (body.closing_time !== undefined) updateData.closing_time = body.closing_time;
+      // DB schema uses total_courts; accept both total_courts and courts_count
       if (body.courts_count !== undefined) updateData.total_courts = body.courts_count;
+      if ((body as any).total_courts !== undefined) updateData.total_courts = (body as any).total_courts;
       if (body.day_schedules !== undefined) updateData.day_schedules = body.day_schedules;
       if (body.min_booking_duration !== undefined) updateData.min_booking_duration = body.min_booking_duration;
 
@@ -235,7 +242,8 @@ Deno.serve(async (req) => {
             error: "Failed to update venue", 
             details: error.message,
             code: error.code,
-            hint: error.hint
+            hint: error.hint,
+            invalidFields: Object.keys(updateData)
           }),
           { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );

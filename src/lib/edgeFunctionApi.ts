@@ -38,7 +38,10 @@ export interface Venue {
   opening_time?: string;
   closing_time?: string;
   courts_count?: number;
+  // Backend canonical name (DB)
+  total_courts?: number;
   min_booking_duration?: number;
+  day_schedules?: Record<string, { enabled: boolean; open: string; close: string }> | null;
   description?: string;
   amenities?: string[];
   created_at: string;
@@ -178,7 +181,11 @@ export const edgeFunctionApi = {
     const venues = Array.isArray(data) ? data : (data?.venues || []);
     
     return {
-      venues: venues.map((v: any) => ({ ...v, location: v.city || v.location })) as Venue[],
+      venues: venues.map((v: any) => ({
+        ...v,
+        location: v.city || v.location,
+        courts_count: v.courts_count ?? v.total_courts,
+      })) as Venue[],
       total: data?.total || venues.length,
       page: params.page || 1,
       limit: params.limit || 20,
@@ -207,9 +214,11 @@ export const edgeFunctionApi = {
         is_active: venue.is_active ?? true,
         amenities: venue.amenities || [],
         description: venue.description || '',
-        opening_hours: venue.opening_hours || null,
+        // Prefer canonical DB field name, but keep legacy alias as fallback
+        day_schedules: (venue as any).day_schedules || venue.opening_hours || null,
         min_booking_duration: venue.min_booking_duration || 60,
-        courts_count: venue.courts_count || 1,
+        // Prefer canonical DB field name, but keep legacy alias as fallback
+        total_courts: (venue as any).total_courts || venue.courts_count || 1,
       },
     });
 
@@ -219,7 +228,13 @@ export const edgeFunctionApi = {
     }
 
     const venueData = data?.venue || data;
-    return { venue: { ...venueData, location: venueData.city || venueData.location } as Venue };
+    return {
+      venue: {
+        ...venueData,
+        location: venueData.city || venueData.location,
+        courts_count: venueData.courts_count ?? venueData.total_courts,
+      } as Venue,
+    };
   },
 
   async updateVenue(venueId: string, updates: Partial<Venue> & {
@@ -243,7 +258,9 @@ export const edgeFunctionApi = {
     if (updates.opening_time !== undefined) updateData.opening_time = updates.opening_time;
     if (updates.closing_time !== undefined) updateData.closing_time = updates.closing_time;
     if (updates.description !== undefined) updateData.description = updates.description;
-    if (updates.courts_count !== undefined) updateData.courts_count = updates.courts_count;
+    // DB canonical field name is total_courts; never send legacy courts_count to the DB layer
+    if (updates.courts_count !== undefined) updateData.total_courts = updates.courts_count;
+    if ((updates as any).total_courts !== undefined) updateData.total_courts = (updates as any).total_courts;
     if (updates.min_booking_duration !== undefined) updateData.min_booking_duration = updates.min_booking_duration;
     if (updates.day_schedules !== undefined) updateData.day_schedules = updates.day_schedules;
 
@@ -267,7 +284,13 @@ export const edgeFunctionApi = {
     }
 
     const venueData = data?.venue || data;
-    return { venue: { ...venueData, location: venueData.city || venueData.location } as Venue };
+    return {
+      venue: {
+        ...venueData,
+        location: venueData.city || venueData.location,
+        courts_count: venueData.courts_count ?? venueData.total_courts,
+      } as Venue,
+    };
   },
 
   async deleteVenue(venueId: string): Promise<{ success: boolean }> {
