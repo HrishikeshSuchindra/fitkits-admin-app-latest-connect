@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { edgeFunctionApi, Venue, SlotAvailability } from '@/lib/edgeFunctionApi';
 import { AdminLayout } from '@/components/layout/AdminLayout';
@@ -17,7 +17,8 @@ import {
   Unlock,
   Loader2,
   AlertCircle,
-  X
+  X,
+  Undo2
 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
@@ -53,6 +54,15 @@ function generate30MinSlots(openingTime: string = '07:00', closingTime: string =
   return slots;
 }
 
+// Type for tracking last block action for undo
+interface LastBlockAction {
+  type: 'slots' | 'fullDay';
+  slots: string[];
+  date: string;
+  venueId: string;
+  reason: string;
+}
+
 export default function SlotBlocksPage() {
   const [selectedVenueId, setSelectedVenueId] = useState<string>('');
   const [currentMonth, setCurrentMonth] = useState(new Date());
@@ -61,8 +71,21 @@ export default function SlotBlocksPage() {
   const [blockMode, setBlockMode] = useState<'time' | 'fullDay'>('time');
   const [blockReason, setBlockReason] = useState('');
   const [showBlockDialog, setShowBlockDialog] = useState(false);
+  
+  // Undo mechanism state
+  const [lastBlockAction, setLastBlockAction] = useState<LastBlockAction | null>(null);
+  const undoTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const queryClient = useQueryClient();
+
+  // Cleanup undo timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (undoTimeoutRef.current) {
+        clearTimeout(undoTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // Fetch user's venues
   const { data: venuesData, isLoading: venuesLoading } = useQuery({
@@ -137,6 +160,39 @@ export default function SlotBlocksPage() {
     });
   }, [selectedVenue, slotAvailabilityData]);
 
+  // Undo handler
+  const handleUndo = async () => {
+    if (!lastBlockAction) return;
+    
+    // Clear the timeout since user is undoing
+    if (undoTimeoutRef.current) {
+      clearTimeout(undoTimeoutRef.current);
+      undoTimeoutRef.current = null;
+    }
+
+    try {
+      if (lastBlockAction.type === 'fullDay') {
+        await edgeFunctionApi.unblockFullDay(lastBlockAction.venueId, lastBlockAction.date);
+        toast.success('Full day block undone');
+      } else {
+        // Unblock each slot individually
+        await Promise.all(
+          lastBlockAction.slots.map(time =>
+            edgeFunctionApi.unblockSlot(lastBlockAction.venueId, lastBlockAction.date, time)
+          )
+        );
+        toast.success(`${lastBlockAction.slots.length} slot(s) unblocked`);
+      }
+      
+      queryClient.invalidateQueries({ queryKey: ['slot-availability'] });
+      queryClient.invalidateQueries({ queryKey: ['blocked-days'] });
+      setLastBlockAction(null);
+    } catch (error) {
+      toast.error('Failed to undo block action');
+      console.error('Undo error:', error);
+    }
+  };
+
   // Block multiple slots mutation
   const blockSlotsMutation = useMutation({
     mutationFn: async ({ slots, reason }: { slots: string[]; reason: string }) => {
@@ -150,10 +206,41 @@ export default function SlotBlocksPage() {
         }))
       );
     },
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
+      const dateStr = format(selectedDate!, 'yyyy-MM-dd');
+      
+      // Store action for undo
+      const action: LastBlockAction = {
+        type: 'slots',
+        slots: variables.slots,
+        date: dateStr,
+        venueId: selectedVenueId,
+        reason: variables.reason,
+      };
+      setLastBlockAction(action);
+      
+      // Clear previous timeout if any
+      if (undoTimeoutRef.current) {
+        clearTimeout(undoTimeoutRef.current);
+      }
+      
+      // Set timeout to clear undo option after 10 seconds
+      undoTimeoutRef.current = setTimeout(() => {
+        setLastBlockAction(null);
+      }, 10000);
+      
       queryClient.invalidateQueries({ queryKey: ['slot-availability'] });
       queryClient.invalidateQueries({ queryKey: ['blocked-days'] });
-      toast.success(`${selectedSlots.length} slot(s) blocked`);
+      
+      // Show toast with undo button
+      toast.success(`${variables.slots.length} slot(s) blocked`, {
+        action: {
+          label: 'Undo',
+          onClick: handleUndo,
+        },
+        duration: 10000,
+      });
+      
       handleCloseBlockDialog();
     },
     onError: (error: Error) => {
@@ -167,10 +254,41 @@ export default function SlotBlocksPage() {
       const dateStr = format(selectedDate!, 'yyyy-MM-dd');
       return edgeFunctionApi.blockFullDay(selectedVenueId, dateStr, reason);
     },
-    onSuccess: (data) => {
+    onSuccess: (data, variables) => {
+      const dateStr = format(selectedDate!, 'yyyy-MM-dd');
+      
+      // Store action for undo
+      const action: LastBlockAction = {
+        type: 'fullDay',
+        slots: [],
+        date: dateStr,
+        venueId: selectedVenueId,
+        reason: variables.reason,
+      };
+      setLastBlockAction(action);
+      
+      // Clear previous timeout if any
+      if (undoTimeoutRef.current) {
+        clearTimeout(undoTimeoutRef.current);
+      }
+      
+      // Set timeout to clear undo option after 10 seconds
+      undoTimeoutRef.current = setTimeout(() => {
+        setLastBlockAction(null);
+      }, 10000);
+      
       queryClient.invalidateQueries({ queryKey: ['slot-availability'] });
       queryClient.invalidateQueries({ queryKey: ['blocked-days'] });
-      toast.success(`Full day blocked (${data.blocks_created} slots)`);
+      
+      // Show toast with undo button
+      toast.success(`Full day blocked (${data.blocks_created} slots)`, {
+        action: {
+          label: 'Undo',
+          onClick: handleUndo,
+        },
+        duration: 10000,
+      });
+      
       handleCloseBlockDialog();
     },
     onError: (error: Error) => {
@@ -248,6 +366,30 @@ export default function SlotBlocksPage() {
   return (
     <AdminLayout title="Slot Blocks">
       <div className="space-y-4">
+        {/* Undo Banner - shown when undo is available */}
+        {lastBlockAction && (
+          <div className="bg-primary/10 border border-primary/20 rounded-xl p-3 flex items-center justify-between animate-fade-in">
+            <div className="flex items-center gap-2 text-sm">
+              <Lock className="h-4 w-4 text-primary" />
+              <span>
+                {lastBlockAction.type === 'fullDay' 
+                  ? `Full day blocked on ${lastBlockAction.date}`
+                  : `${lastBlockAction.slots.length} slot(s) blocked`
+                }
+              </span>
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 gap-1.5"
+              onClick={handleUndo}
+            >
+              <Undo2 className="h-3.5 w-3.5" />
+              Undo
+            </Button>
+          </div>
+        )}
+
         {/* Venue Selector */}
         <Card className="card-elevated">
           <CardContent className="p-4">
@@ -264,7 +406,7 @@ export default function SlotBlocksPage() {
                 <SelectTrigger className="h-11 rounded-xl">
                   <SelectValue placeholder="Select a venue" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="bg-background">
                   {venues.map((venue) => (
                     <SelectItem key={venue.id} value={venue.id}>
                       {venue.name}

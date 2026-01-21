@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { edgeFunctionApi, Booking } from '@/lib/edgeFunctionApi';
+import { supabase } from '@/lib/supabase';
 import { AdminLayout } from '@/components/layout/AdminLayout';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -19,21 +20,76 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
   XCircle, 
   RefreshCw,
   Loader2,
   Clock,
-  MapPin
+  MapPin,
+  Users
 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { format } from 'date-fns';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { format, subDays } from 'date-fns';
+
+// Helper to get booking date from either field format
+function getBookingDate(booking: Booking): string | undefined {
+  return booking.slot_date || booking.booking_date;
+}
+
+// Helper to get booking time from either field format
+function getBookingTime(booking: Booking): string {
+  if (booking.slot_time) {
+    // Format slot_time + duration if available
+    if (booking.duration_minutes) {
+      const [hours, mins] = booking.slot_time.split(':').map(Number);
+      const endMins = hours * 60 + mins + booking.duration_minutes;
+      const endHours = Math.floor(endMins / 60);
+      const endMinutes = endMins % 60;
+      return `${booking.slot_time} - ${endHours.toString().padStart(2, '0')}:${endMinutes.toString().padStart(2, '0')}`;
+    }
+    return booking.slot_time;
+  }
+  if (booking.start_time && booking.end_time) {
+    return `${booking.start_time} - ${booking.end_time}`;
+  }
+  return booking.start_time || 'N/A';
+}
+
+// Helper to get amount from either field format
+function getBookingAmount(booking: Booking): number {
+  return booking.price ?? booking.total_amount ?? 0;
+}
+
+// Helper to get user display name
+function getUserName(booking: Booking): string {
+  return booking.user_profile?.display_name || booking.user?.full_name || 'Unknown User';
+}
+
+// Helper to get user initials
+function getUserInitials(booking: Booking): string {
+  const name = getUserName(booking);
+  return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) || 'U';
+}
+
+// Helper to get user avatar
+function getUserAvatar(booking: Booking): string | undefined {
+  return booking.user_profile?.avatar_url || booking.user?.avatar_url;
+}
+
+// Helper to get venue name
+function getVenueName(booking: Booking): string {
+  return booking.venue_name || booking.venue?.name || 'Unknown Venue';
+}
 
 export default function BookingsPage() {
+  const [activeTab, setActiveTab] = useState<'live' | 'previous'>('live');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [venueFilter, setVenueFilter] = useState<string>('all');
   const [page, setPage] = useState(1);
   const [actionDialog, setActionDialog] = useState<{
     type: 'cancel' | 'refund' | null;
@@ -43,21 +99,62 @@ export default function BookingsPage() {
 
   const queryClient = useQueryClient();
 
+  // Fetch venues for filter dropdown
+  const { data: venuesData } = useQuery({
+    queryKey: ['venues'],
+    queryFn: () => edgeFunctionApi.getVenues({ limit: 100 }),
+  });
+
+  const venues = venuesData?.venues || [];
+
+  // Determine date filters based on active tab
+  const today = format(new Date(), 'yyyy-MM-dd');
+
   const { data, isLoading } = useQuery({
-    queryKey: ['bookings', { status: statusFilter, page }],
+    queryKey: ['bookings', { tab: activeTab, status: statusFilter, venue: venueFilter, page }],
     queryFn: () => edgeFunctionApi.getBookings({
       status: statusFilter !== 'all' ? statusFilter : undefined,
+      venue_id: venueFilter !== 'all' ? venueFilter : undefined,
+      date_from: activeTab === 'live' ? today : undefined,
+      date_to: activeTab === 'previous' ? format(subDays(new Date(), 1), 'yyyy-MM-dd') : undefined,
       page,
       limit: 20,
     }),
   });
 
+  // Real-time subscription for booking updates
+  useEffect(() => {
+    const channel = supabase
+      .channel('admin-booking-updates')
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'bookings',
+      }, (payload) => {
+        const newStatus = payload.new?.status;
+        if (newStatus === 'cancelled') {
+          toast.info('A booking was cancelled');
+        }
+        queryClient.invalidateQueries({ queryKey: ['bookings'] });
+        queryClient.invalidateQueries({ queryKey: ['slot-availability'] });
+        queryClient.invalidateQueries({ queryKey: ['booked-days'] });
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [queryClient]);
+
   const cancelMutation = useMutation({
     mutationFn: ({ bookingId, reason }: { bookingId: string; reason: string }) =>
       edgeFunctionApi.cancelBooking(bookingId, reason),
     onSuccess: () => {
+      // Invalidate all related queries for immediate UI update
       queryClient.invalidateQueries({ queryKey: ['bookings'] });
-      toast.success('Booking cancelled');
+      queryClient.invalidateQueries({ queryKey: ['slot-availability'] });
+      queryClient.invalidateQueries({ queryKey: ['booked-days'] });
+      toast.success('Booking cancelled. User will be notified.');
       closeDialog();
     },
     onError: (error: Error) => {
@@ -70,6 +167,8 @@ export default function BookingsPage() {
       edgeFunctionApi.refundBooking(bookingId, reason),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['bookings'] });
+      queryClient.invalidateQueries({ queryKey: ['slot-availability'] });
+      queryClient.invalidateQueries({ queryKey: ['booked-days'] });
       toast.success('Refund processed');
       closeDialog();
     },
@@ -101,6 +200,7 @@ export default function BookingsPage() {
   const getStatusBadgeClass = (status: string) => {
     switch (status) {
       case 'confirmed':
+      case 'paid':
         return 'badge-success';
       case 'pending':
         return 'badge-warning';
@@ -112,9 +212,10 @@ export default function BookingsPage() {
   };
 
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
+    return new Intl.NumberFormat('en-IN', {
       style: 'currency',
-      currency: 'USD',
+      currency: 'INR',
+      maximumFractionDigits: 0,
     }).format(amount || 0);
   };
 
@@ -130,20 +231,46 @@ export default function BookingsPage() {
   };
 
   return (
-    <AdminLayout title="Live Bookings">
+    <AdminLayout title="Bookings">
       <div className="space-y-4">
-        {/* Filter */}
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="h-11 rounded-xl">
-            <SelectValue placeholder="Filter by status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Bookings</SelectItem>
-            <SelectItem value="confirmed">Confirmed</SelectItem>
-            <SelectItem value="pending">Pending</SelectItem>
-            <SelectItem value="cancelled">Cancelled</SelectItem>
-          </SelectContent>
-        </Select>
+        {/* Tabs for Live/Previous */}
+        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'live' | 'previous')}>
+          <TabsList className="grid w-full grid-cols-2 rounded-xl bg-muted">
+            <TabsTrigger value="live" className="rounded-lg">Live Bookings</TabsTrigger>
+            <TabsTrigger value="previous" className="rounded-lg">Previous</TabsTrigger>
+          </TabsList>
+        </Tabs>
+
+        {/* Filters Row */}
+        <div className="flex gap-2">
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="h-10 rounded-xl flex-1">
+              <SelectValue placeholder="Status" />
+            </SelectTrigger>
+            <SelectContent className="bg-background">
+              <SelectItem value="all">All Status</SelectItem>
+              <SelectItem value="confirmed">Confirmed</SelectItem>
+              <SelectItem value="pending">Pending</SelectItem>
+              <SelectItem value="cancelled">Cancelled</SelectItem>
+            </SelectContent>
+          </Select>
+
+          {venues.length > 1 && (
+            <Select value={venueFilter} onValueChange={setVenueFilter}>
+              <SelectTrigger className="h-10 rounded-xl flex-1">
+                <SelectValue placeholder="Venue" />
+              </SelectTrigger>
+              <SelectContent className="bg-background">
+                <SelectItem value="all">All Venues</SelectItem>
+                {venues.map((venue) => (
+                  <SelectItem key={venue.id} value={venue.id}>
+                    {venue.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        </div>
 
         {/* Bookings List */}
         <div className="space-y-3">
@@ -167,31 +294,41 @@ export default function BookingsPage() {
               <Card key={booking.id} className="card-elevated">
                 <CardContent className="p-4">
                   <div className="flex items-start gap-3">
-                    <div className="h-12 w-12 rounded-full bg-primary-light flex items-center justify-center flex-shrink-0">
-                      <span className="text-primary font-semibold">
-                        {booking.user?.full_name?.[0]?.toUpperCase() || 'U'}
-                      </span>
-                    </div>
+                    <Avatar className="h-12 w-12">
+                      <AvatarImage src={getUserAvatar(booking)} alt={getUserName(booking)} />
+                      <AvatarFallback className="bg-primary/10 text-primary font-semibold">
+                        {getUserInitials(booking)}
+                      </AvatarFallback>
+                    </Avatar>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between mb-1">
                         <p className="font-semibold text-foreground truncate">
-                          {booking.user?.full_name || 'Unknown User'}
+                          {getUserName(booking)}
                         </p>
                         <span className={getStatusBadgeClass(booking.status)}>
-                          {booking.status}
+                          {booking.status.charAt(0).toUpperCase() + booking.status.slice(1)}
                         </span>
                       </div>
                       <div className="flex items-center gap-1 text-sm text-muted-foreground mb-1">
-                        <MapPin className="h-3 w-3" />
-                        <span className="truncate">{booking.venue?.name || 'Unknown Venue'}</span>
+                        <MapPin className="h-3 w-3 flex-shrink-0" />
+                        <span className="truncate">{getVenueName(booking)}</span>
+                        {booking.court_number && (
+                          <span className="text-xs">• Court {booking.court_number}</span>
+                        )}
                       </div>
+                      {booking.player_count && (
+                        <div className="flex items-center gap-1 text-sm text-muted-foreground mb-1">
+                          <Users className="h-3 w-3" />
+                          <span>Number of Players: {booking.player_count}</span>
+                        </div>
+                      )}
                       <div className="flex items-center gap-1 text-sm text-muted-foreground">
                         <Clock className="h-3 w-3" />
-                        <span>{formatDate(booking.booking_date)} • {booking.start_time || 'N/A'} - {booking.end_time || 'N/A'}</span>
+                        <span>{formatDate(getBookingDate(booking))} • {getBookingTime(booking)}</span>
                       </div>
                       <div className="flex items-center justify-between mt-3">
                         <span className="font-bold text-success text-lg">
-                          {formatCurrency(booking.total_amount)}
+                          {formatCurrency(getBookingAmount(booking))}
                         </span>
                         {booking.status !== 'cancelled' && (
                           <div className="flex gap-2">
@@ -267,7 +404,7 @@ export default function BookingsPage() {
             </DialogTitle>
             <DialogDescription>
               {actionDialog.type === 'cancel' 
-                ? 'This will cancel the booking and notify the user.' 
+                ? 'This will cancel the booking and notify the user. The slot will become available again.' 
                 : 'Process a refund for this booking.'}
             </DialogDescription>
           </DialogHeader>
