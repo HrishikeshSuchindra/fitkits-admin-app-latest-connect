@@ -1,6 +1,7 @@
-import { useState, useRef } from "react";
-import { useNavigate } from "react-router-dom";
-import { FileText, Image, DollarSign, Eye, Upload, X, Check, Clock, MapPin, Star, Wifi, Car, Shirt, Wind, Dumbbell, MoreHorizontal, Camera, Heart, ChevronLeft, ChevronRight } from "lucide-react";
+import { useState, useRef, useEffect } from "react";
+import { useNavigate, useParams } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
+import { FileText, Image, DollarSign, Eye, Upload, X, Check, Clock, MapPin, Star, Wifi, Car, Shirt, Wind, Dumbbell, MoreHorizontal, Camera, Heart, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import { MobileHeader } from "@/components/ui/MobileHeader";
 import { StepIndicator } from "@/components/ui/StepIndicator";
 import { Button } from "@/components/ui/button";
@@ -11,7 +12,7 @@ import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import { edgeFunctionApi } from "@/lib/edgeFunctionApi";
+import { edgeFunctionApi, Venue } from "@/lib/edgeFunctionApi";
 import { uploadVenuePhoto, uploadMultipleVenuePhotos } from "@/lib/uploadVenuePhoto";
 import { toast } from "sonner";
 
@@ -58,7 +59,7 @@ const typesByCategory: Record<string, { value: string; label: string }[]> = {
   ],
 };
 
-const amenities = [
+const standardAmenities = [
   { id: "wifi", label: "WiFi", icon: Wifi },
   { id: "parking", label: "Parking", icon: Car },
   { id: "changing_rooms", label: "Changing Rooms", icon: Shirt },
@@ -66,6 +67,8 @@ const amenities = [
   { id: "equipment", label: "Equipment", icon: Dumbbell },
   { id: "other", label: "Other", icon: MoreHorizontal },
 ];
+
+const standardAmenityIds = standardAmenities.map(a => a.id);
 
 const daysOfWeek = [
   { short: "Mon", full: "Monday" },
@@ -95,49 +98,103 @@ const countries = [
   { value: "singapore", label: "Singapore" },
 ];
 
-export default function AddVenue() {
+export default function EditVenue() {
   const navigate = useNavigate();
+  const { venueId } = useParams<{ venueId: string }>();
   const [currentStep, setCurrentStep] = useState(1);
-  const [isPublishing, setIsPublishing] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [previewImageIndex, setPreviewImageIndex] = useState(0);
+  const [isInitialized, setIsInitialized] = useState(false);
   
   const coverPhotoRef = useRef<HTMLInputElement>(null);
   const additionalPhotosRef = useRef<HTMLInputElement>(null);
 
+  // Fetch venue data
+  const { data: venueData, isLoading } = useQuery({
+    queryKey: ['venue', venueId],
+    queryFn: async () => {
+      const response = await edgeFunctionApi.getVenues({});
+      const venue = response.venues.find(v => v.id === venueId);
+      if (!venue) throw new Error('Venue not found');
+      return venue;
+    },
+    enabled: !!venueId,
+  });
+
   // Form state
   const [formData, setFormData] = useState({
-    // Basic Info
     name: "",
     category: "", // Main category: courts, studio, recovery
     type: "", // Sub-type: padel, tennis, yoga, etc.
     description: "",
-    
-    // Location
     streetAddress: "",
     city: "",
     postalCode: "",
     country: "",
-    
-    // Media
     coverPhoto: null as File | null,
     coverPhotoPreview: "",
+    existingCoverPhotoUrl: "",
     additionalPhotos: [] as File[],
     additionalPhotosPreviews: [] as string[],
+    existingAdditionalPhotos: [] as string[],
     selectedAmenities: [] as string[],
-    customAmenities: [] as string[], // Custom amenities typed by user
-    newCustomAmenity: "", // Input field for typing new custom amenity
-    
-    // Pricing & Availability
+    customAmenities: [] as string[],
+    newCustomAmenity: "",
     schedule: daysOfWeek.map((day, index) => ({
       day: day.short,
       fullDay: day.full,
-      enabled: index < 5, // Mon-Fri enabled by default
+      enabled: index < 5,
       open: "09:00",
       close: "17:00",
     })),
-    minDuration: 60, // Default 1 hour in minutes
+    minDuration: 60,
     pricePerHour: "",
+    isActive: true,
   });
+
+  // Initialize form with venue data
+  useEffect(() => {
+    if (venueData && !isInitialized) {
+      // Parse existing amenities into standard and custom
+      const existingAmenities = venueData.amenities || [];
+      const standardSelected = existingAmenities.filter(a => standardAmenityIds.includes(a) || a === 'other');
+      const customOnes = existingAmenities.filter(a => !standardAmenityIds.includes(a) && a !== 'other');
+      
+      // If there are custom amenities, also select "other" to show the input
+      const hasCustom = customOnes.length > 0;
+      
+      setFormData({
+        name: venueData.name || "",
+        category: venueData.category || "courts",
+        type: venueData.sport || "",
+        description: venueData.description || "",
+        streetAddress: venueData.address || "",
+        city: venueData.location || "",
+        postalCode: "",
+        country: "",
+        coverPhoto: null,
+        coverPhotoPreview: "",
+        existingCoverPhotoUrl: venueData.image_url || "",
+        additionalPhotos: [],
+        additionalPhotosPreviews: [],
+        existingAdditionalPhotos: [],
+        selectedAmenities: hasCustom ? [...standardSelected, 'other'] : standardSelected,
+        customAmenities: customOnes,
+        newCustomAmenity: "",
+        schedule: daysOfWeek.map((day, index) => ({
+          day: day.short,
+          fullDay: day.full,
+          enabled: index < 5,
+          open: venueData.opening_time || "09:00",
+          close: venueData.closing_time || "17:00",
+        })),
+        minDuration: venueData.min_booking_duration || 60,
+        pricePerHour: String(venueData.price_per_hour || ""),
+        isActive: venueData.is_active ?? true,
+      });
+      setIsInitialized(true);
+    }
+  }, [venueData, isInitialized]);
 
   const handleNext = () => {
     if (currentStep < 4) setCurrentStep((prev) => prev + 1);
@@ -215,14 +272,16 @@ export default function AddVenue() {
         ...prev,
         coverPhoto: file,
         coverPhotoPreview: URL.createObjectURL(file),
+        existingCoverPhotoUrl: "", // Clear existing when new one selected
       }));
     }
   };
 
   const handleAdditionalPhotosSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
-    const maxPhotos = 9; // Max 9 additional photos (10 total with cover)
-    const remainingSlots = maxPhotos - formData.additionalPhotos.length;
+    const maxPhotos = 9;
+    const currentCount = formData.additionalPhotos.length + formData.existingAdditionalPhotos.length;
+    const remainingSlots = maxPhotos - currentCount;
     const newFiles = files.slice(0, remainingSlots);
     
     if (newFiles.length > 0) {
@@ -242,6 +301,7 @@ export default function AddVenue() {
       ...prev,
       coverPhoto: null,
       coverPhotoPreview: "",
+      existingCoverPhotoUrl: "",
     }));
   };
 
@@ -253,15 +313,21 @@ export default function AddVenue() {
     }));
   };
 
-  const handlePublish = async () => {
-    // Validation
+  const handleRemoveExistingPhoto = (index: number) => {
+    setFormData((prev) => ({
+      ...prev,
+      existingAdditionalPhotos: prev.existingAdditionalPhotos.filter((_, i) => i !== index),
+    }));
+  };
+
+  const handleSave = async () => {
     if (!formData.name.trim()) {
       toast.error("Venue name is required");
       setCurrentStep(1);
       return;
     }
-    if (!formData.category) {
-      toast.error("Category is required");
+    if (!formData.type) {
+      toast.error("Venue type is required");
       setCurrentStep(1);
       return;
     }
@@ -276,34 +342,34 @@ export default function AddVenue() {
       return;
     }
 
-    setIsPublishing(true);
+    setIsSaving(true);
 
     try {
       const slug = formData.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
-      
-      let coverPhotoUrl = "";
-      const photoUrls: string[] = [];
 
-      // Upload cover photo
+      let coverPhotoUrl = formData.existingCoverPhotoUrl;
+      const photoUrls: string[] = [...formData.existingAdditionalPhotos];
+
+      // Upload new cover photo if selected
       if (formData.coverPhoto) {
         try {
           coverPhotoUrl = await uploadVenuePhoto(formData.coverPhoto, slug, 0);
         } catch (uploadError) {
-          console.warn('Cover photo upload failed, continuing without it:', uploadError);
+          console.warn('Cover photo upload failed:', uploadError);
         }
       }
 
-      // Upload additional photos
+      // Upload new additional photos
       if (formData.additionalPhotos.length > 0) {
         try {
           const uploadedUrls = await uploadMultipleVenuePhotos(
             formData.additionalPhotos,
             slug,
-            1
+            photoUrls.length + 1
           );
           photoUrls.push(...uploadedUrls);
         } catch (uploadError) {
-          console.warn('Additional photos upload failed, continuing without them:', uploadError);
+          console.warn('Additional photos upload failed:', uploadError);
         }
       }
 
@@ -317,59 +383,77 @@ export default function AddVenue() {
         return acc;
       }, {} as Record<string, { enabled: boolean; open: string; close: string }>);
 
-      // Combine standard and custom amenities (exclude "other" placeholder, add actual custom ones)
+      // Combine standard and custom amenities
       const allAmenities = [
         ...formData.selectedAmenities.filter(a => a !== 'other'),
         ...formData.customAmenities,
       ];
 
-      // Create venue
-      const venueData = {
+      const venueUpdates = {
         name: formData.name,
         slug,
-        category: 'courts',
-        sport: formData.category,
+        category: formData.category,
+        sport: formData.type,
         address: formData.streetAddress,
         location: formData.city,
         price_per_hour: parseFloat(formData.pricePerHour),
         image_url: coverPhotoUrl || null,
         amenities: allAmenities,
         description: formData.description,
-        opening_hours: openingHours,
-        min_booking_duration: formData.minDuration,
-        is_active: true,
+        is_active: formData.isActive,
       };
 
-      await edgeFunctionApi.createVenue(venueData);
+      await edgeFunctionApi.updateVenue(venueId!, venueUpdates);
 
-      toast.success("Venue published successfully!");
+      toast.success("Venue updated successfully!");
       navigate("/venues");
     } catch (error: any) {
-      console.error('Publish error:', error);
-      toast.error(error.message || "Failed to publish venue");
+      console.error('Save error:', error);
+      toast.error(error.message || "Failed to save venue");
     } finally {
-      setIsPublishing(false);
+      setIsSaving(false);
     }
   };
 
+  // Get current cover image (new or existing)
+  const currentCoverImage = formData.coverPhotoPreview || formData.existingCoverPhotoUrl;
+
   // Get all preview images for the carousel
   const allPreviewImages = [
-    formData.coverPhotoPreview,
+    currentCoverImage,
+    ...formData.existingAdditionalPhotos,
     ...formData.additionalPhotosPreviews,
   ].filter(Boolean);
 
   const canGoToPrevImage = previewImageIndex > 0;
   const canGoToNextImage = previewImageIndex < allPreviewImages.length - 1;
 
+  // Get available types based on selected category
+  const availableTypes = typesByCategory[formData.category] || [];
+
+  if (isLoading) {
+    return (
+      <div className="mobile-container flex items-center justify-center min-h-screen">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
   return (
     <div className="mobile-container pb-6">
       <MobileHeader
-        title="Add New Venue"
+        title="Edit Venue"
         showBack
         onBackClick={handleBack}
         showNotification={false}
         rightContent={
-          <button className="text-sm text-primary font-medium">Save</button>
+          <button 
+            onClick={handleSave}
+            disabled={isSaving}
+            className="text-sm text-primary font-medium disabled:opacity-50"
+          >
+            {isSaving ? "Saving..." : "Save"}
+          </button>
         }
       />
 
@@ -420,7 +504,7 @@ export default function AddVenue() {
                   <SelectValue placeholder={formData.category ? "Select type" : "Select category first"} />
                 </SelectTrigger>
                 <SelectContent>
-                  {(typesByCategory[formData.category] || []).map((type) => (
+                  {availableTypes.map((type) => (
                     <SelectItem key={type.value} value={type.value}>
                       {type.label}
                     </SelectItem>
@@ -447,7 +531,6 @@ export default function AddVenue() {
             <div className="space-y-3">
               <Label>Location</Label>
               
-              {/* Map placeholder */}
               <div className="card-elevated p-4 flex items-center justify-center h-32 border-2 border-dashed border-border cursor-pointer hover:border-primary/50 transition-colors">
                 <div className="text-center">
                   <MapPin className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
@@ -490,6 +573,17 @@ export default function AddVenue() {
                 </SelectContent>
               </Select>
             </div>
+
+            <div className="flex items-center justify-between py-2 card-elevated p-4 rounded-xl">
+              <div>
+                <Label>Active Status</Label>
+                <p className="text-xs text-muted-foreground mt-0.5">Venue visible to customers</p>
+              </div>
+              <Switch
+                checked={formData.isActive}
+                onCheckedChange={(checked) => setFormData({ ...formData, isActive: checked })}
+              />
+            </div>
           </div>
         )}
 
@@ -502,7 +596,6 @@ export default function AddVenue() {
                 Add photos of your venue. The first photo will be your cover image.
               </p>
               
-              {/* Hidden file inputs */}
               <input
                 type="file"
                 ref={coverPhotoRef}
@@ -520,11 +613,10 @@ export default function AddVenue() {
               />
 
               <div className="space-y-3">
-                {/* Cover Photo Upload */}
-                {formData.coverPhotoPreview ? (
+                {currentCoverImage ? (
                   <div className="relative aspect-video rounded-xl overflow-hidden">
                     <img
-                      src={formData.coverPhotoPreview}
+                      src={currentCoverImage}
                       alt="Cover"
                       className="w-full h-full object-cover"
                     />
@@ -551,11 +643,29 @@ export default function AddVenue() {
 
                 {/* Additional Photos Grid */}
                 <div className="grid grid-cols-4 gap-2">
+                  {/* Existing additional photos */}
+                  {formData.existingAdditionalPhotos.map((url, index) => (
+                    <div key={`existing-${index}`} className="relative aspect-square rounded-lg overflow-hidden">
+                      <img
+                        src={url}
+                        alt={`Photo ${index + 2}`}
+                        className="w-full h-full object-cover"
+                      />
+                      <button
+                        onClick={() => handleRemoveExistingPhoto(index)}
+                        className="absolute top-1 right-1 w-6 h-6 bg-black/50 rounded-full flex items-center justify-center text-white hover:bg-black/70 transition-colors"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  ))}
+                  
+                  {/* New additional photos */}
                   {formData.additionalPhotosPreviews.map((preview, index) => (
-                    <div key={index} className="relative aspect-square rounded-lg overflow-hidden">
+                    <div key={`new-${index}`} className="relative aspect-square rounded-lg overflow-hidden">
                       <img
                         src={preview}
-                        alt={`Photo ${index + 2}`}
+                        alt={`Photo ${formData.existingAdditionalPhotos.length + index + 2}`}
                         className="w-full h-full object-cover"
                       />
                       <button
@@ -567,7 +677,7 @@ export default function AddVenue() {
                     </div>
                   ))}
                   
-                  {formData.additionalPhotosPreviews.length < 9 && (
+                  {(formData.existingAdditionalPhotos.length + formData.additionalPhotosPreviews.length) < 9 && (
                     <button
                       onClick={() => additionalPhotosRef.current?.click()}
                       className="aspect-square rounded-lg border-2 border-dashed border-border bg-muted/50 flex items-center justify-center hover:border-primary/50 transition-colors cursor-pointer"
@@ -589,7 +699,7 @@ export default function AddVenue() {
                 Select the amenities available at your venue.
               </p>
               <div className="grid grid-cols-2 gap-2">
-                {amenities.map((amenity) => {
+                {standardAmenities.map((amenity) => {
                   const isSelected = formData.selectedAmenities.includes(amenity.id);
                   const Icon = amenity.icon;
                   return (
@@ -624,7 +734,7 @@ export default function AddVenue() {
                 })}
               </div>
 
-              {/* Custom Amenities Input - shown when "Other" is selected */}
+              {/* Custom Amenities Input */}
               {formData.selectedAmenities.includes("other") && (
                 <div className="mt-4 space-y-3">
                   <Label className="text-sm">Add Custom Amenities</Label>
@@ -651,7 +761,6 @@ export default function AddVenue() {
                     </Button>
                   </div>
                   
-                  {/* Display custom amenities as removable chips */}
                   {formData.customAmenities.length > 0 && (
                     <div className="flex flex-wrap gap-2">
                       {formData.customAmenities.map((amenity) => (
@@ -786,7 +895,6 @@ export default function AddVenue() {
         {/* Step 4: Preview */}
         {currentStep === 4 && (
           <div className="space-y-4 animate-fade-in">
-            {/* Image Preview with Carousel */}
             <div className="relative aspect-[16/10] rounded-xl overflow-hidden bg-muted">
               {allPreviewImages.length > 0 ? (
                 <>
@@ -796,17 +904,14 @@ export default function AddVenue() {
                     className="w-full h-full object-cover"
                   />
                   
-                  {/* Image counter */}
                   <div className="absolute top-2 left-2 px-2 py-1 bg-black/50 rounded-md text-xs text-white">
                     {previewImageIndex + 1} of {allPreviewImages.length}
                   </div>
                   
-                  {/* Favorite button */}
                   <button className="absolute top-2 right-2 w-8 h-8 bg-black/50 rounded-full flex items-center justify-center text-white hover:bg-black/70 transition-colors">
                     <Heart className="w-4 h-4" />
                   </button>
                   
-                  {/* Navigation arrows */}
                   {canGoToPrevImage && (
                     <button
                       onClick={() => setPreviewImageIndex((prev) => prev - 1)}
@@ -831,7 +936,6 @@ export default function AddVenue() {
               )}
             </div>
 
-            {/* Venue Info */}
             <div className="space-y-3">
               <div className="flex items-start justify-between">
                 <div>
@@ -839,12 +943,12 @@ export default function AddVenue() {
                     {formData.name || "Venue Name"}
                   </h2>
                   <p className="text-sm text-muted-foreground capitalize">
-                    {formData.category || "Category"}
+                    {formData.category} • {formData.type || "Type"}
                   </p>
                 </div>
                 <div className="flex items-center gap-1 bg-primary/10 px-2 py-1 rounded-full">
                   <Star className="w-3.5 h-3.5 text-primary fill-primary" />
-                  <span className="text-xs font-medium text-primary">New</span>
+                  <span className="text-xs font-medium text-primary">4.8</span>
                 </div>
               </div>
 
@@ -864,16 +968,14 @@ export default function AddVenue() {
               </div>
             </div>
 
-            {/* What this place offers */}
             {(formData.selectedAmenities.length > 0 || formData.customAmenities.length > 0) && (
               <div>
                 <h3 className="font-semibold text-foreground mb-2">What this place offers</h3>
                 <div className="grid grid-cols-2 gap-2">
-                  {/* Standard amenities (exclude "other" placeholder) */}
                   {formData.selectedAmenities
                     .filter(id => id !== 'other')
                     .map((id) => {
-                      const amenity = amenities.find((a) => a.id === id);
+                      const amenity = standardAmenities.find((a) => a.id === id);
                       if (!amenity) return null;
                       const Icon = amenity.icon;
                       return (
@@ -883,7 +985,6 @@ export default function AddVenue() {
                         </div>
                       );
                     })}
-                  {/* Custom amenities */}
                   {formData.customAmenities.map((custom) => (
                     <div key={custom} className="flex items-center gap-2 py-2">
                       <Check className="w-4 h-4 text-muted-foreground" />
@@ -894,7 +995,6 @@ export default function AddVenue() {
               </div>
             )}
 
-            {/* About */}
             {formData.description && (
               <div>
                 <h3 className="font-semibold text-foreground mb-2">About this venue</h3>
@@ -904,7 +1004,6 @@ export default function AddVenue() {
               </div>
             )}
 
-            {/* Opening Hours Preview */}
             <div>
               <h3 className="font-semibold text-foreground mb-2">Opening Hours</h3>
               <div className="space-y-1">
@@ -924,16 +1023,16 @@ export default function AddVenue() {
           {currentStep === 4 ? (
             <>
               <Button
-                onClick={handlePublish}
+                onClick={handleSave}
                 className="w-full bg-success hover:bg-success/90 text-white"
-                disabled={isPublishing}
+                disabled={isSaving}
               >
-                {isPublishing ? (
-                  "Publishing..."
+                {isSaving ? (
+                  "Saving..."
                 ) : (
                   <>
                     <Check className="w-4 h-4 mr-2" />
-                    Publish Listing
+                    Save Changes
                   </>
                 )}
               </Button>
