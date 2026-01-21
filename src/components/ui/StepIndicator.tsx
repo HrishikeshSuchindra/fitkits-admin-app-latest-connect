@@ -15,27 +15,31 @@ interface StepIndicatorProps {
 
 export function StepIndicator({ steps, currentStep, className }: StepIndicatorProps) {
   const progressWidth = ((currentStep - 1) / (steps.length - 1)) * 100;
+  const progressPercentage = Math.round((currentStep / steps.length) * 100);
 
   return (
     <div className={cn("w-full", className)}>
-      {/* Step Counter */}
-      <div className="text-center mb-4">
+      {/* Step Counter with Percentage */}
+      <div className="flex items-center justify-center gap-2 mb-4">
         <span className="text-sm text-muted-foreground">
           Step {currentStep} of {steps.length}
+        </span>
+        <span className="text-sm font-medium text-primary">
+          ({progressPercentage}%)
         </span>
       </div>
 
       {/* Progress Bar */}
-      <div className="relative h-1 bg-muted rounded-full mb-6 overflow-hidden">
+      <div className="relative h-1.5 bg-muted rounded-full mb-6 overflow-hidden">
         <div
           className="absolute left-0 top-0 h-full bg-primary rounded-full transition-all duration-500 ease-out"
-          style={{ width: `${progressWidth}%` }}
+          style={{ width: `${progressPercentage}%` }}
         />
       </div>
 
       {/* Step Icons */}
       <div className="flex justify-between relative">
-        {steps.map((step, index) => {
+        {steps.map((step) => {
           const isCompleted = currentStep > step.id;
           const isCurrent = currentStep === step.id;
           const Icon = step.icon;
