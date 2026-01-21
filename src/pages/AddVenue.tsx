@@ -96,6 +96,8 @@ export default function AddVenue() {
     additionalPhotos: [] as File[],
     additionalPhotosPreviews: [] as string[],
     selectedAmenities: [] as string[],
+    customAmenities: [] as string[], // Custom amenities typed by user
+    newCustomAmenity: "", // Input field for typing new custom amenity
     
     // Pricing & Availability
     schedule: daysOfWeek.map((day, index) => ({
@@ -124,6 +126,24 @@ export default function AddVenue() {
       selectedAmenities: prev.selectedAmenities.includes(id)
         ? prev.selectedAmenities.filter((a) => a !== id)
         : [...prev.selectedAmenities, id],
+    }));
+  };
+
+  const handleAddCustomAmenity = () => {
+    const trimmed = formData.newCustomAmenity.trim();
+    if (trimmed && !formData.customAmenities.includes(trimmed)) {
+      setFormData((prev) => ({
+        ...prev,
+        customAmenities: [...prev.customAmenities, trimmed],
+        newCustomAmenity: "",
+      }));
+    }
+  };
+
+  const handleRemoveCustomAmenity = (amenity: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      customAmenities: prev.customAmenities.filter((a) => a !== amenity),
     }));
   };
 
@@ -269,6 +289,12 @@ export default function AddVenue() {
         return acc;
       }, {} as Record<string, { enabled: boolean; open: string; close: string }>);
 
+      // Combine standard and custom amenities (exclude "other" placeholder, add actual custom ones)
+      const allAmenities = [
+        ...formData.selectedAmenities.filter(a => a !== 'other'),
+        ...formData.customAmenities,
+      ];
+
       // Create venue
       const venueData = {
         name: formData.name,
@@ -279,7 +305,7 @@ export default function AddVenue() {
         location: formData.city,
         price_per_hour: parseFloat(formData.pricePerHour),
         image_url: coverPhotoUrl || null,
-        amenities: formData.selectedAmenities,
+        amenities: allAmenities,
         description: formData.description,
         opening_hours: openingHours,
         min_booking_duration: formData.minDuration,
@@ -549,6 +575,55 @@ export default function AddVenue() {
                   );
                 })}
               </div>
+
+              {/* Custom Amenities Input - shown when "Other" is selected */}
+              {formData.selectedAmenities.includes("other") && (
+                <div className="mt-4 space-y-3">
+                  <Label className="text-sm">Add Custom Amenities</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="e.g., Sauna, Juice Bar, Pro Shop..."
+                      value={formData.newCustomAmenity}
+                      onChange={(e) => setFormData({ ...formData, newCustomAmenity: e.target.value })}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          handleAddCustomAmenity();
+                        }
+                      }}
+                      className="flex-1"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={handleAddCustomAmenity}
+                      disabled={!formData.newCustomAmenity.trim()}
+                    >
+                      Add
+                    </Button>
+                  </div>
+                  
+                  {/* Display custom amenities as removable chips */}
+                  {formData.customAmenities.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {formData.customAmenities.map((amenity) => (
+                        <div
+                          key={amenity}
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-primary/10 text-primary rounded-full text-sm"
+                        >
+                          <span>{amenity}</span>
+                          <button
+                            onClick={() => handleRemoveCustomAmenity(amenity)}
+                            className="hover:text-destructive transition-colors"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -742,21 +817,31 @@ export default function AddVenue() {
             </div>
 
             {/* What this place offers */}
-            {formData.selectedAmenities.length > 0 && (
+            {(formData.selectedAmenities.length > 0 || formData.customAmenities.length > 0) && (
               <div>
                 <h3 className="font-semibold text-foreground mb-2">What this place offers</h3>
                 <div className="grid grid-cols-2 gap-2">
-                  {formData.selectedAmenities.map((id) => {
-                    const amenity = amenities.find((a) => a.id === id);
-                    if (!amenity) return null;
-                    const Icon = amenity.icon;
-                    return (
-                      <div key={id} className="flex items-center gap-2 py-2">
-                        <Icon className="w-4 h-4 text-muted-foreground" />
-                        <span className="text-sm">{amenity.label}</span>
-                      </div>
-                    );
-                  })}
+                  {/* Standard amenities (exclude "other" placeholder) */}
+                  {formData.selectedAmenities
+                    .filter(id => id !== 'other')
+                    .map((id) => {
+                      const amenity = amenities.find((a) => a.id === id);
+                      if (!amenity) return null;
+                      const Icon = amenity.icon;
+                      return (
+                        <div key={id} className="flex items-center gap-2 py-2">
+                          <Icon className="w-4 h-4 text-muted-foreground" />
+                          <span className="text-sm">{amenity.label}</span>
+                        </div>
+                      );
+                    })}
+                  {/* Custom amenities */}
+                  {formData.customAmenities.map((custom) => (
+                    <div key={custom} className="flex items-center gap-2 py-2">
+                      <Check className="w-4 h-4 text-muted-foreground" />
+                      <span className="text-sm">{custom}</span>
+                    </div>
+                  ))}
                 </div>
               </div>
             )}
