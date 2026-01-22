@@ -16,6 +16,19 @@ import EventsPage from "./pages/admin/Events";
 import AuditLogPage from "./pages/admin/AuditLog";
 import NotFound from "./pages/NotFound";
 
+// Settings pages
+import EditProfile from "./pages/settings/EditProfile";
+import AppSettings from "./pages/settings/AppSettings";
+
+// Support pages
+import HelpCentre from "./pages/support/HelpCentre";
+import ContactUs from "./pages/support/ContactUs";
+import AboutUs from "./pages/support/AboutUs";
+
+// Legal pages
+import PrivacyPolicy from "./pages/legal/PrivacyPolicy";
+import TermsOfService from "./pages/legal/TermsOfService";
+
 const queryClient = new QueryClient();
 
 function AppRoutes() {
@@ -34,6 +47,20 @@ function AppRoutes() {
         <Route path="/slot-blocks" element={<ProtectedRoute><SlotBlocksPage /></ProtectedRoute>} />
         <Route path="/events" element={<ProtectedRoute><EventsPage /></ProtectedRoute>} />
         <Route path="/audit-log" element={<ProtectedRoute><AuditLogPage /></ProtectedRoute>} />
+        
+        {/* Settings */}
+        <Route path="/edit-profile" element={<ProtectedRoute><EditProfile /></ProtectedRoute>} />
+        <Route path="/app-settings" element={<ProtectedRoute><AppSettings /></ProtectedRoute>} />
+        
+        {/* Support */}
+        <Route path="/help" element={<ProtectedRoute><HelpCentre /></ProtectedRoute>} />
+        <Route path="/contact" element={<ProtectedRoute><ContactUs /></ProtectedRoute>} />
+        <Route path="/about" element={<ProtectedRoute><AboutUs /></ProtectedRoute>} />
+        
+        {/* Legal */}
+        <Route path="/privacy-policy" element={<ProtectedRoute><PrivacyPolicy /></ProtectedRoute>} />
+        <Route path="/terms" element={<ProtectedRoute><TermsOfService /></ProtectedRoute>} />
+        
         <Route path="*" element={<NotFound />} />
       </Routes>
     );
@@ -50,6 +77,20 @@ function AppRoutes() {
       <Route path="/slot-blocks" element={<ProtectedRoute><SlotBlocksPage /></ProtectedRoute>} />
       <Route path="/events" element={<ProtectedRoute><EventsPage /></ProtectedRoute>} />
       <Route path="/audit-log" element={<ProtectedRoute><AuditLogPage /></ProtectedRoute>} />
+      
+      {/* Settings */}
+      <Route path="/edit-profile" element={<ProtectedRoute><EditProfile /></ProtectedRoute>} />
+      <Route path="/app-settings" element={<ProtectedRoute><AppSettings /></ProtectedRoute>} />
+      
+      {/* Support */}
+      <Route path="/help" element={<ProtectedRoute><HelpCentre /></ProtectedRoute>} />
+      <Route path="/contact" element={<ProtectedRoute><ContactUs /></ProtectedRoute>} />
+      <Route path="/about" element={<ProtectedRoute><AboutUs /></ProtectedRoute>} />
+      
+      {/* Legal */}
+      <Route path="/privacy-policy" element={<ProtectedRoute><PrivacyPolicy /></ProtectedRoute>} />
+      <Route path="/terms" element={<ProtectedRoute><TermsOfService /></ProtectedRoute>} />
+      
       <Route path="*" element={<NotFound />} />
     </Routes>
   );
