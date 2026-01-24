@@ -510,16 +510,20 @@ export const edgeFunctionApi = {
     const lastDay = new Date(params.year, params.month, 0).getDate();
     const endDate = `${params.year}-${String(params.month).padStart(2, '0')}-${lastDay}`;
 
-    const { blocks } = await edgeFunctionApi.getBlockedSlots({
-      venue_id: params.venue_id,
-      date_from: startDate,
-      date_to: endDate,
-      // ensure we capture the whole month even if many blocks
-      limit: 5000,
-      page: 1,
-    });
+    // Query slot_blocks table directly for reliable data
+    const { data, error } = await supabase
+      .from('slot_blocks')
+      .select('slot_date')
+      .eq('venue_id', params.venue_id)
+      .gte('slot_date', startDate)
+      .lte('slot_date', endDate);
 
-    const uniqueDates = [...new Set(blocks.map((b: any) => b.slot_date))] as string[];
+    if (error) {
+      console.error('Get blocked days error:', error);
+      return { dates: [] };
+    }
+
+    const uniqueDates = [...new Set((data || []).map((b: any) => b.slot_date))] as string[];
     
     return { dates: uniqueDates };
   },
@@ -537,15 +541,21 @@ export const edgeFunctionApi = {
     const lastDay = new Date(params.year, params.month, 0).getDate();
     const endDate = `${params.year}-${String(params.month).padStart(2, '0')}-${lastDay}`;
 
-    const { bookings } = await edgeFunctionApi.getBookings({
-      venue_id: params.venue_id,
-      date_from: startDate,
-      date_to: endDate,
-      limit: 5000,
-      page: 1,
-    });
+    // Query bookings table directly for reliable data
+    const { data, error } = await supabase
+      .from('bookings')
+      .select('slot_date')
+      .eq('venue_id', params.venue_id)
+      .neq('status', 'cancelled')
+      .gte('slot_date', startDate)
+      .lte('slot_date', endDate);
 
-    const uniqueDates = [...new Set(bookings.map((b: any) => b.slot_date || b.booking_date))] as string[];
+    if (error) {
+      console.error('Get booked days error:', error);
+      return { dates: [] };
+    }
+
+    const uniqueDates = [...new Set((data || []).map((b: any) => b.slot_date))] as string[];
     
     return { dates: uniqueDates };
   },
