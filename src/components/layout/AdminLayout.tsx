@@ -196,7 +196,7 @@ export function AdminLayout({ children, title }: AdminLayoutProps) {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 mobile-padding py-4 pb-24 safe-bottom">
+      <main className="flex-1 mobile-padding py-4 pb-nav">
         {children}
       </main>
 

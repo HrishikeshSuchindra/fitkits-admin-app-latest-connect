@@ -45,7 +45,7 @@ export default function Dashboard() {
   const [dateRange, setDateRange] = useState("Last 7 Days");
 
   return (
-    <div className="mobile-container pb-24">
+    <div className="mobile-container pb-nav">
       <MobileHeader title="Business Insights" showNotification />
 
       <div className="mobile-padding space-y-6 py-4">
