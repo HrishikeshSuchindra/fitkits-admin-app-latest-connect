@@ -15,7 +15,7 @@ const menuItems = [
 
 export default function Profile() {
   return (
-    <div className="mobile-container pb-24">
+    <div className="mobile-container pb-nav">
       <MobileHeader title="Profile" showMenu={false} showNotification={false} />
 
       <div className="mobile-padding space-y-6 py-6">

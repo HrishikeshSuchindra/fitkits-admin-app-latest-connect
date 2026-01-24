@@ -225,6 +225,11 @@
     padding-top: max(0.75rem, env(safe-area-inset-top));
   }
 
+  /* Bottom Nav Padding - accounts for nav height + safe area */
+  .pb-nav {
+    padding-bottom: calc(5rem + max(1rem, env(safe-area-inset-bottom)));
+  }
+
   /* Calendar Day States */
   .calendar-day {
     @apply w-10 h-10 rounded-full flex items-center justify-center text-sm font-medium cursor-pointer transition-all duration-200 relative;
