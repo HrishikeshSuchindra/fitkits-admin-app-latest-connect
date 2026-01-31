@@ -143,6 +143,21 @@ export default function ManageOwners() {
         throw roleError;
       }
 
+      // Sync user to profiles table for user application visibility
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .upsert({
+          user_id: application.user_id,
+          display_name: application.full_name,
+          phone_number: application.phone,
+          is_active: true,
+        }, { onConflict: 'user_id' });
+
+      if (profileError) {
+        console.error('Error syncing profile:', profileError);
+        // Don't fail the approval, just log the error
+      }
+
       toast.success(`${application.full_name} has been approved as a venue owner`);
       fetchData();
     } catch (error) {
