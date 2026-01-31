@@ -16,13 +16,16 @@ import {
   Info,
   Shield,
   FileCheck,
-  ChevronRight
+  ChevronRight,
+  Users
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useState } from 'react';
 import { NotificationDropdown } from '@/components/ui/NotificationDropdown';
+
+const MASTER_ADMIN_EMAIL = 'hrishikeshsuchindra@gmail.com';
 
 // Bottom nav items (main navigation)
 const navItems = [
@@ -69,6 +72,7 @@ export function AdminLayout({ children, title }: AdminLayoutProps) {
   const location = useLocation();
   const { signOut, user } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const isMasterAdmin = user?.email === MASTER_ADMIN_EMAIL;
 
   const handleSignOut = async () => {
     await signOut();
@@ -145,6 +149,33 @@ export function AdminLayout({ children, title }: AdminLayoutProps) {
 
           {/* Sidebar Sections */}
           <nav className="flex-1 p-4 space-y-6">
+            {/* Master Admin Section */}
+            {isMasterAdmin && (
+              <div className="space-y-2">
+                <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-3">
+                  Master Admin
+                </h3>
+                <div className="space-y-1">
+                  <Link
+                    to="/manage-owners"
+                    onClick={() => setSidebarOpen(false)}
+                    className={cn(
+                      "flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium transition-colors",
+                      location.pathname === '/manage-owners'
+                        ? "bg-primary text-primary-foreground" 
+                        : "text-foreground hover:bg-muted"
+                    )}
+                  >
+                    <div className="flex items-center gap-3">
+                      <Users className="h-4 w-4" />
+                      Manage Owners
+                    </div>
+                    <ChevronRight className="h-4 w-4 opacity-50" />
+                  </Link>
+                </div>
+              </div>
+            )}
+
             {sidebarSections.map((section) => (
               <div key={section.title} className="space-y-2">
                 <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-3">
