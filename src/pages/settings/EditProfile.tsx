@@ -1,14 +1,16 @@
 import { useState } from 'react';
 import { ArrowLeft, Camera, Save } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 
 export default function EditProfile() {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [formData, setFormData] = useState({
@@ -16,15 +18,32 @@ export default function EditProfile() {
     phone: user?.user_metadata?.phone || '',
   });
 
+  const displayName = user?.user_metadata?.display_name || user?.email?.split('@')[0] || 'User';
+  const avatarInitial = displayName[0]?.toUpperCase() || 'U';
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    toast.success('Profile updated successfully');
-    setIsLoading(false);
+    try {
+      const { error } = await supabase.auth.updateUser({
+        data: {
+          display_name: formData.displayName,
+          phone: formData.phone,
+        }
+      });
+
+      if (error) {
+        toast.error(error.message || 'Failed to update profile');
+      } else {
+        toast.success('Profile updated successfully');
+        navigate('/profile');
+      }
+    } catch (err) {
+      toast.error('An unexpected error occurred');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -32,7 +51,7 @@ export default function EditProfile() {
       {/* Header */}
       <header className="sticky top-0 z-50 bg-card border-b border-border safe-top">
         <div className="flex items-center h-14 px-4 gap-3">
-          <Link to="/">
+          <Link to="/profile">
             <Button variant="ghost" size="icon" className="h-9 w-9">
               <ArrowLeft className="h-5 w-5" />
             </Button>
@@ -48,7 +67,7 @@ export default function EditProfile() {
             <Avatar className="w-24 h-24">
               <AvatarImage src="" alt="Profile" />
               <AvatarFallback className="bg-primary text-primary-foreground text-2xl font-semibold">
-                {user?.email?.[0]?.toUpperCase() || 'A'}
+                {avatarInitial}
               </AvatarFallback>
             </Avatar>
             <button className="absolute bottom-0 right-0 w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-lg">
