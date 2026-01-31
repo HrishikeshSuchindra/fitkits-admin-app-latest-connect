@@ -191,7 +191,7 @@ export default function AdminDashboard() {
                     fontSize={10}
                     tickLine={false}
                     axisLine={false}
-                    tickFormatter={(value) => `$${value}`}
+                    tickFormatter={(value) => `₹${value}`}
                   />
                   <Tooltip 
                     contentStyle={{ 
