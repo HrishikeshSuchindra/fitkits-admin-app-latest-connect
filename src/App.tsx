@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import Login from "./pages/Login";
+import Register from "./pages/Register";
 import AdminDashboard from "./pages/admin/Dashboard";
 import BookingsPage from "./pages/admin/Bookings";
 import VenuesPage from "./pages/admin/Venues";
@@ -14,6 +15,7 @@ import EditVenue from "./pages/EditVenue";
 import SlotBlocksPage from "./pages/admin/SlotBlocks";
 import EventsPage from "./pages/admin/Events";
 import AuditLogPage from "./pages/admin/AuditLog";
+import ManageOwners from "./pages/admin/ManageOwners";
 import NotFound from "./pages/NotFound";
 
 // Settings pages
@@ -32,16 +34,21 @@ import AboutUs from "./pages/support/AboutUs";
 import PrivacyPolicy from "./pages/legal/PrivacyPolicy";
 import TermsOfService from "./pages/legal/TermsOfService";
 
+// Master admin email constant
+const MASTER_ADMIN_EMAIL = 'hrishikeshsuchindra@gmail.com';
+
 const queryClient = new QueryClient();
 
 function AppRoutes() {
   const { user, userRole, isLoading } = useAuth();
+  const isMasterAdmin = user?.email === MASTER_ADMIN_EMAIL;
 
   // Redirect logged-in users with valid roles away from login page
   if (!isLoading && user && userRole) {
     return (
       <Routes>
         <Route path="/login" element={<Navigate to="/" replace />} />
+        <Route path="/register" element={<Navigate to="/" replace />} />
         <Route path="/" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
         <Route path="/bookings" element={<ProtectedRoute><BookingsPage /></ProtectedRoute>} />
         <Route path="/venues" element={<ProtectedRoute><VenuesPage /></ProtectedRoute>} />
@@ -50,6 +57,11 @@ function AppRoutes() {
         <Route path="/slot-blocks" element={<ProtectedRoute><SlotBlocksPage /></ProtectedRoute>} />
         <Route path="/events" element={<ProtectedRoute><EventsPage /></ProtectedRoute>} />
         <Route path="/audit-log" element={<ProtectedRoute><AuditLogPage /></ProtectedRoute>} />
+        
+        {/* Master Admin Only */}
+        {isMasterAdmin && (
+          <Route path="/manage-owners" element={<ProtectedRoute><ManageOwners /></ProtectedRoute>} />
+        )}
         
         {/* Settings */}
         <Route path="/edit-profile" element={<ProtectedRoute><EditProfile /></ProtectedRoute>} />
@@ -76,6 +88,7 @@ function AppRoutes() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
+      <Route path="/register" element={<Register />} />
       <Route path="/" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
       <Route path="/bookings" element={<ProtectedRoute><BookingsPage /></ProtectedRoute>} />
       <Route path="/venues" element={<ProtectedRoute><VenuesPage /></ProtectedRoute>} />

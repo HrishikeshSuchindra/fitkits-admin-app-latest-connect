@@ -71,20 +71,6 @@ export default function Login() {
               />
             </div>
             
-            <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
-              <Input
-                id="password"
-                type="password"
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                disabled={isLoading}
-                className="h-11 rounded-xl"
-              />
-            </div>
-            
             <Button type="submit" className="w-full h-11 rounded-xl" disabled={isLoading}>
               {isLoading ? (
                 <>
@@ -95,6 +81,13 @@ export default function Login() {
                 'Sign In'
               )}
             </Button>
+
+            <p className="text-center text-sm text-muted-foreground">
+              Want to become a venue owner?{' '}
+              <a href="/register" className="text-primary font-medium hover:underline">
+                Apply here
+              </a>
+            </p>
           </form>
         </CardContent>
       </Card>

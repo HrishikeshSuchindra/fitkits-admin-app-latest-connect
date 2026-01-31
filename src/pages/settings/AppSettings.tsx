@@ -6,12 +6,13 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useState } from 'react';
 import { toast } from 'sonner';
+import { useTheme } from '@/contexts/ThemeContext';
 
 export default function AppSettings() {
+  const { theme, toggleTheme } = useTheme();
   const [settings, setSettings] = useState({
     notifications: true,
     emailAlerts: true,
-    darkMode: false,
     language: 'en',
     twoFactor: false,
   });
@@ -19,6 +20,11 @@ export default function AppSettings() {
   const handleToggle = (key: keyof typeof settings) => {
     setSettings(prev => ({ ...prev, [key]: !prev[key] }));
     toast.success('Setting updated');
+  };
+
+  const handleDarkModeToggle = () => {
+    toggleTheme();
+    toast.success(`${theme === 'light' ? 'Dark' : 'Light'} mode enabled`);
   };
 
   return (
@@ -76,7 +82,7 @@ export default function AppSettings() {
         <div className="card-elevated p-4 space-y-4">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
-              {settings.darkMode ? <Moon className="w-5 h-5 text-primary" /> : <Sun className="w-5 h-5 text-primary" />}
+              {theme === 'dark' ? <Moon className="w-5 h-5 text-primary" /> : <Sun className="w-5 h-5 text-primary" />}
             </div>
             <h2 className="font-semibold text-foreground">Appearance</h2>
           </div>
@@ -88,8 +94,8 @@ export default function AppSettings() {
             </Label>
             <Switch
               id="dark-mode"
-              checked={settings.darkMode}
-              onCheckedChange={() => handleToggle('darkMode')}
+              checked={theme === 'dark'}
+              onCheckedChange={handleDarkModeToggle}
             />
           </div>
         </div>
