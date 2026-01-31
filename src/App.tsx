@@ -19,6 +19,9 @@ import NotFound from "./pages/NotFound";
 // Settings pages
 import EditProfile from "./pages/settings/EditProfile";
 import AppSettings from "./pages/settings/AppSettings";
+import Notifications from "./pages/settings/Notifications";
+import PaymentMethods from "./pages/settings/PaymentMethods";
+import Security from "./pages/settings/Security";
 
 // Support pages
 import HelpCentre from "./pages/support/HelpCentre";
@@ -50,7 +53,11 @@ function AppRoutes() {
         
         {/* Settings */}
         <Route path="/edit-profile" element={<ProtectedRoute><EditProfile /></ProtectedRoute>} />
+        <Route path="/settings/edit-profile" element={<ProtectedRoute><EditProfile /></ProtectedRoute>} />
         <Route path="/app-settings" element={<ProtectedRoute><AppSettings /></ProtectedRoute>} />
+        <Route path="/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
+        <Route path="/payment-methods" element={<ProtectedRoute><PaymentMethods /></ProtectedRoute>} />
+        <Route path="/security" element={<ProtectedRoute><Security /></ProtectedRoute>} />
         
         {/* Support */}
         <Route path="/help" element={<ProtectedRoute><HelpCentre /></ProtectedRoute>} />
@@ -80,7 +87,11 @@ function AppRoutes() {
       
       {/* Settings */}
       <Route path="/edit-profile" element={<ProtectedRoute><EditProfile /></ProtectedRoute>} />
+      <Route path="/settings/edit-profile" element={<ProtectedRoute><EditProfile /></ProtectedRoute>} />
       <Route path="/app-settings" element={<ProtectedRoute><AppSettings /></ProtectedRoute>} />
+      <Route path="/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
+      <Route path="/payment-methods" element={<ProtectedRoute><PaymentMethods /></ProtectedRoute>} />
+      <Route path="/security" element={<ProtectedRoute><Security /></ProtectedRoute>} />
       
       {/* Support */}
       <Route path="/help" element={<ProtectedRoute><HelpCentre /></ProtectedRoute>} />
