@@ -8,6 +8,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     storage: localStorage,
     persistSession: true,
     autoRefreshToken: true,
+    storageKey: 'fitkits-admin-auth',
   }
 });
 
