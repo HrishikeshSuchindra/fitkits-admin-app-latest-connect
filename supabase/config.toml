@@ -27,3 +27,6 @@ site_url = "http://localhost:3000"
 
 [functions.admin-venues]
 verify_jwt = false
+
+[functions.admin-bookings]
+verify_jwt = false

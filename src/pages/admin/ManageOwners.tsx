@@ -41,6 +41,13 @@ interface OwnerApplication {
   created_at: string;
 }
 
+interface OwnerVenue {
+  id: string;
+  name: string;
+  location: string;
+  is_active: boolean;
+}
+
 interface OwnerStats {
   user_id: string;
   email: string;
@@ -49,6 +56,7 @@ interface OwnerStats {
   venue_count: number;
   total_bookings: number;
   total_revenue: number;
+  venues?: OwnerVenue[];
 }
 
 export default function ManageOwners() {
@@ -76,37 +84,80 @@ export default function ManageOwners() {
       if (appsError) throw appsError;
       setApplications(apps || []);
 
-      // Fetch approved owners with their stats
-      const { data: ownersData, error: ownersError } = await supabase
-        .from('owner_applications')
-        .select('user_id, email, full_name, phone')
-        .eq('status', 'approved');
+      // Fetch ALL venue owners from user_roles table (not just from owner_applications)
+      // This ensures we see all existing owners, even if they didn't go through the application process
+      const { data: roleData, error: rolesError } = await supabase
+        .from('user_roles')
+        .select('user_id')
+        .eq('role', 'venue_owner');
 
-      if (ownersError) throw ownersError;
+      if (rolesError) throw rolesError;
 
-      // For each owner, fetch venue count, bookings, and revenue
+      // Get unique owner user IDs
+      const ownerUserIds = [...new Set((roleData || []).map(r => r.user_id))];
+
+      // For each owner, fetch their profile, venues, and stats
       const ownerStats: OwnerStats[] = await Promise.all(
-        (ownersData || []).map(async (owner) => {
-          // Get venue count
-          const { count: venueCount } = await supabase
-            .from('venues')
-            .select('*', { count: 'exact', head: true })
-            .eq('owner_id', owner.user_id);
+        ownerUserIds.map(async (userId) => {
+          // Get profile info (try owner_applications first, then profiles)
+          let ownerInfo = { email: '', full_name: 'Unknown', phone: '' };
+          
+          const { data: appData } = await supabase
+            .from('owner_applications')
+            .select('email, full_name, phone')
+            .eq('user_id', userId)
+            .eq('status', 'approved')
+            .single();
+          
+          if (appData) {
+            ownerInfo = appData;
+          } else {
+            // Fallback to profiles table
+            const { data: profileData } = await supabase
+              .from('profiles')
+              .select('display_name, phone_number')
+              .eq('user_id', userId)
+              .single();
+            
+            // Get email from auth users if possible
+            const { data: authData } = await supabase.auth.admin.getUserById(userId).catch(() => ({ data: null }));
+            
+            ownerInfo = {
+              email: (authData as any)?.user?.email || 'N/A',
+              full_name: profileData?.display_name || 'Unknown',
+              phone: profileData?.phone_number || '',
+            };
+          }
 
-          // Get bookings and revenue
+          // Get venues for this owner
+          const { data: venueData, count: venueCount } = await supabase
+            .from('venues')
+            .select('id, name, city, is_active', { count: 'exact' })
+            .eq('owner_id', userId);
+
+          // Get bookings and revenue across all owner's venues
           const { data: bookings } = await supabase
             .from('bookings')
             .select('total_amount, venues!inner(owner_id)')
-            .eq('venues.owner_id', owner.user_id);
+            .eq('venues.owner_id', userId);
 
           const totalBookings = bookings?.length || 0;
           const totalRevenue = bookings?.reduce((sum, b) => sum + (b.total_amount || 0), 0) || 0;
 
           return {
-            ...owner,
+            user_id: userId,
+            email: ownerInfo.email,
+            full_name: ownerInfo.full_name,
+            phone: ownerInfo.phone,
             venue_count: venueCount || 0,
             total_bookings: totalBookings,
             total_revenue: totalRevenue,
+            venues: (venueData || []).map(v => ({
+              id: v.id,
+              name: v.name,
+              location: v.city || '',
+              is_active: v.is_active,
+            })),
           };
         })
       );
@@ -540,7 +591,7 @@ export default function ManageOwners() {
 
       {/* Owner Details Dialog */}
       <Dialog open={!!selectedOwner} onOpenChange={() => setSelectedOwner(null)}>
-        <DialogContent>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Owner Details</DialogTitle>
           </DialogHeader>
@@ -557,7 +608,7 @@ export default function ManageOwners() {
                 </div>
                 <div>
                   <p className="text-muted-foreground">Phone</p>
-                  <p className="font-medium">{selectedOwner.phone}</p>
+                  <p className="font-medium">{selectedOwner.phone || 'N/A'}</p>
                 </div>
                 <div>
                   <p className="text-muted-foreground">Total Venues</p>
@@ -572,6 +623,37 @@ export default function ManageOwners() {
                   <p className="font-medium">₹{selectedOwner.total_revenue.toLocaleString()}</p>
                 </div>
               </div>
+
+              {/* Venues List */}
+              {selectedOwner.venues && selectedOwner.venues.length > 0 && (
+                <div>
+                  <p className="text-muted-foreground text-sm mb-2">Venues ({selectedOwner.venues.length})</p>
+                  <div className="space-y-2 max-h-40 overflow-y-auto">
+                    {selectedOwner.venues.map((venue) => (
+                      <div
+                        key={venue.id}
+                        className="flex items-center justify-between p-2 bg-muted rounded-lg text-sm"
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <MapPin className="h-3 w-3 shrink-0 text-muted-foreground" />
+                          <span className="truncate">{venue.name}</span>
+                        </div>
+                        <Badge variant={venue.is_active ? 'default' : 'secondary'} className="text-xs shrink-0">
+                          {venue.is_active ? 'Active' : 'Inactive'}
+                        </Badge>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {selectedOwner.venues && selectedOwner.venues.length === 0 && (
+                <div className="text-center py-3 text-muted-foreground text-sm bg-muted rounded-lg">
+                  <MapPin className="h-5 w-5 mx-auto mb-1 opacity-50" />
+                  No venues listed yet
+                </div>
+              )}
+
               <Button
                 variant="destructive"
                 className="w-full"
