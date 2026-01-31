@@ -131,7 +131,7 @@ export default function AdminDashboard() {
         <div className="grid grid-cols-2 gap-3">
           <KPICard
             title="Total Revenue"
-            value={stats ? formatCurrency(stats.totalRevenue) : '$0'}
+            value={stats ? formatCurrency(stats.totalRevenue) : '₹0'}
             change={stats?.revenueGrowth}
             icon={DollarSign}
             iconBg="bg-success-light"
@@ -200,7 +200,7 @@ export default function AdminDashboard() {
                       borderRadius: '12px',
                       fontSize: '12px'
                     }}
-                    formatter={(value: number) => [`$${value}`, 'Revenue']}
+                    formatter={(value: number) => [`₹${value}`, 'Revenue']}
                     labelFormatter={(label) => new Date(label).toLocaleDateString()}
                   />
                   <Area 

@@ -256,8 +256,7 @@ export default function VenuesPage() {
                         {venue.category} • {venue.sport}
                       </p>
                       <div className="flex items-center gap-1 mt-2 text-success font-bold">
-                        <DollarSign className="h-4 w-4" />
-                        <span>{venue.price_per_hour}/hr</span>
+                        <span>₹{venue.price_per_hour}/hr</span>
                       </div>
                     </div>
                     <div className="flex gap-2">
@@ -434,7 +433,7 @@ export default function VenuesPage() {
               </div>
 
               <div className="space-y-2">
-                <Label>Price per Hour ($)</Label>
+                <Label>Price per Hour (₹)</Label>
                 <Input
                   type="number"
                   value={editDialog.venue.price_per_hour}
