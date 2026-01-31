@@ -10,6 +10,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
 import { formatDistanceToNow } from 'date-fns';
+import { useAuth } from '@/contexts/AuthContext';
 
 export interface Notification {
   id: string;
@@ -21,31 +22,43 @@ export interface Notification {
   metadata?: Record<string, unknown>;
 }
 
-// Local storage key for notifications
-const NOTIFICATIONS_KEY = 'admin_notifications';
+// Local storage key for notifications (per user)
+const getNotificationsKey = (userId: string) => `admin_notifications_${userId}`;
 
 export function NotificationDropdown() {
+  const { user } = useAuth();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [open, setOpen] = useState(false);
 
   const unreadCount = notifications.filter(n => !n.is_read).length;
 
-  // Load notifications from localStorage on mount
+  // Load notifications from localStorage on mount (user-specific)
   useEffect(() => {
-    const stored = localStorage.getItem(NOTIFICATIONS_KEY);
+    if (!user?.id) {
+      setNotifications([]);
+      return;
+    }
+    
+    const key = getNotificationsKey(user.id);
+    const stored = localStorage.getItem(key);
     if (stored) {
       try {
         setNotifications(JSON.parse(stored));
       } catch {
         setNotifications([]);
       }
+    } else {
+      // Fresh user - start with empty notifications
+      setNotifications([]);
     }
-  }, []);
+  }, [user?.id]);
 
-  // Save to localStorage when notifications change
+  // Save to localStorage when notifications change (user-specific)
   useEffect(() => {
-    localStorage.setItem(NOTIFICATIONS_KEY, JSON.stringify(notifications));
-  }, [notifications]);
+    if (!user?.id) return;
+    const key = getNotificationsKey(user.id);
+    localStorage.setItem(key, JSON.stringify(notifications));
+  }, [notifications, user?.id]);
 
   // Subscribe to real-time booking changes
   useEffect(() => {
