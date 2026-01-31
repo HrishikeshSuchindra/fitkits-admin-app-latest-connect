@@ -82,7 +82,7 @@ export function VenueCard({
 
         <div className="flex items-center justify-between pt-3 border-t border-border">
           <div>
-            <span className="text-lg font-bold text-success">${pricePerHour}</span>
+            <span className="text-lg font-bold text-success">₹{pricePerHour}</span>
             <span className="text-sm text-muted-foreground">/hour</span>
           </div>
           <Button
