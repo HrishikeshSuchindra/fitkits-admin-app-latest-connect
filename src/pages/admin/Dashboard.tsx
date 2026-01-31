@@ -102,11 +102,13 @@ export default function AdminDashboard() {
   const stats = overview?.overview;
 
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      minimumFractionDigits: 0,
-    }).format(amount);
+    if (amount >= 100000) {
+      return `₹${(amount / 100000).toFixed(1)}L`;
+    }
+    if (amount >= 1000) {
+      return `₹${(amount / 1000).toFixed(1)}k`;
+    }
+    return `₹${amount}`;
   };
 
   return (

@@ -42,7 +42,7 @@ export function TopUsersList({ users, className }: TopUsersListProps) {
             </div>
 
             <div className="text-right">
-              <p className="font-bold text-foreground">${user.revenue.toLocaleString()}</p>
+              <p className="font-bold text-foreground">₹{user.revenue.toLocaleString()}</p>
             </div>
           </div>
         ))}

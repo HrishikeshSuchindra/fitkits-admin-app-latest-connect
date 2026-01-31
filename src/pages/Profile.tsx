@@ -11,9 +11,9 @@ import { supabase } from "@/lib/supabase";
 
 const menuItems = [
   { icon: User, label: "Edit Profile", href: "/settings/edit-profile" },
-  { icon: Bell, label: "Notifications", href: "#", badge: "3" },
-  { icon: CreditCard, label: "Payment Methods", href: "#" },
-  { icon: Shield, label: "Security", href: "#" },
+  { icon: Bell, label: "Notifications", href: "/notifications" },
+  { icon: CreditCard, label: "Payment Methods", href: "/payment-methods" },
+  { icon: Shield, label: "Security", href: "/security" },
   { icon: Settings, label: "Settings", href: "/settings" },
   { icon: HelpCircle, label: "Help & Support", href: "/support/help" },
 ];
@@ -149,9 +149,6 @@ export default function Profile() {
                 <span className="flex-1 text-left font-medium text-foreground">
                   {item.label}
                 </span>
-                {item.badge && (
-                  <span className="badge-primary">{item.badge}</span>
-                )}
                 <ChevronRight className="w-4 h-4 text-muted-foreground" />
               </button>
             );
