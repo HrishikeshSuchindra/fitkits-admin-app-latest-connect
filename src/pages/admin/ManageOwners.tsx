@@ -99,35 +99,60 @@ export default function ManageOwners() {
       // For each owner, fetch their profile, venues, and stats
       const ownerStats: OwnerStats[] = await Promise.all(
         ownerUserIds.map(async (userId) => {
-          // Get profile info (try owner_applications first, then profiles)
-          let ownerInfo = { email: '', full_name: 'Unknown', phone: '' };
-          
+          // Get profile info (prefer owner_applications, fallback to profiles)
+          // NOTE: We must NOT use supabase.auth.admin in the browser.
+          let ownerInfo = { email: 'N/A', full_name: 'Unknown', phone: '' };
+
           const { data: appData } = await supabase
             .from('owner_applications')
             .select('email, full_name, phone')
             .eq('user_id', userId)
             .eq('status', 'approved')
-            .single();
-          
-          if (appData) {
-            ownerInfo = appData;
-          } else {
-            // Fallback to profiles table
-            const { data: profileData } = await supabase
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          // Profiles schema differs across environments (some use id, some use user_id)
+          const fetchProfile = async (): Promise<any | null> => {
+            // Try user_id first
+            const byUserId = await supabase
               .from('profiles')
-              .select('display_name, phone_number')
+              .select('*')
               .eq('user_id', userId)
-              .single();
-            
-            // Get email from auth users if possible
-            const { data: authData } = await supabase.auth.admin.getUserById(userId).catch(() => ({ data: null }));
-            
-            ownerInfo = {
-              email: (authData as any)?.user?.email || 'N/A',
-              full_name: profileData?.display_name || 'Unknown',
-              phone: profileData?.phone_number || '',
-            };
-          }
+              .maybeSingle();
+
+            if (!byUserId.error && byUserId.data) return byUserId.data;
+
+            // If the column doesn't exist OR there was no row, try legacy id mapping
+            const shouldTryId =
+              !!byUserId.error ||
+              !byUserId.data ||
+              (byUserId.error?.message || '').toLowerCase().includes('column') ||
+              (byUserId.error?.message || '').toLowerCase().includes('user_id');
+
+            if (!shouldTryId) return null;
+
+            const byId = await supabase
+              .from('profiles')
+              .select('*')
+              .eq('id', userId)
+              .maybeSingle();
+
+            if (!byId.error && byId.data) return byId.data;
+            return null;
+          };
+
+          const profileData = await fetchProfile();
+
+          ownerInfo = {
+            email: appData?.email || profileData?.email || 'N/A',
+            full_name:
+              appData?.full_name ||
+              profileData?.full_name ||
+              profileData?.display_name ||
+              'Unknown',
+            phone: appData?.phone || profileData?.phone || profileData?.phone_number || '',
+          };
 
           // Get venues for this owner
           const { data: venueData, count: venueCount } = await supabase
@@ -136,13 +161,24 @@ export default function ManageOwners() {
             .eq('owner_id', userId);
 
           // Get bookings and revenue across all owner's venues
-          const { data: bookings } = await supabase
-            .from('bookings')
-            .select('total_amount, venues!inner(owner_id)')
-            .eq('venues.owner_id', userId);
+          // Avoid PostgREST embedded joins here because FK relationships may not exist.
+          const venueIds = (venueData || []).map(v => v.id);
+          let totalBookings = 0;
+          let totalRevenue = 0;
 
-          const totalBookings = bookings?.length || 0;
-          const totalRevenue = bookings?.reduce((sum, b) => sum + (b.total_amount || 0), 0) || 0;
+          if (venueIds.length > 0) {
+            const { data: bookings, error: bookingsError } = await supabase
+              .from('bookings')
+              .select('total_amount')
+              .in('venue_id', venueIds);
+
+            if (bookingsError) {
+              console.error('Error fetching bookings for owner:', userId, bookingsError);
+            } else {
+              totalBookings = bookings?.length || 0;
+              totalRevenue = bookings?.reduce((sum, b) => sum + (b.total_amount || 0), 0) || 0;
+            }
+          }
 
           return {
             user_id: userId,
