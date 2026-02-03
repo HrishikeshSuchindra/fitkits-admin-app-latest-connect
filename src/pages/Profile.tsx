@@ -12,10 +12,9 @@ import { supabase } from "@/lib/supabase";
 const menuItems = [
   { icon: User, label: "Edit Profile", href: "/settings/edit-profile" },
   { icon: Bell, label: "Notifications", href: "/notifications" },
-  { icon: CreditCard, label: "Payment Methods", href: "/payment-methods" },
   { icon: Shield, label: "Security", href: "/security" },
-  { icon: Settings, label: "Settings", href: "/settings" },
-  { icon: HelpCircle, label: "Help & Support", href: "/support/help" },
+  { icon: Settings, label: "Settings", href: "/app-settings" },
+  { icon: HelpCircle, label: "Help & Support", href: "/help" },
 ];
 
 const formatCurrency = (amount: number) => {
