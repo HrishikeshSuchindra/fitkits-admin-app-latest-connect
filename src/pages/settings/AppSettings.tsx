@@ -1,9 +1,8 @@
-import { ArrowLeft, Bell, Moon, Sun, Globe, Shield } from 'lucide-react';
+import { ArrowLeft, Bell, Moon, Sun, Globe } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -13,8 +12,6 @@ export default function AppSettings() {
   const [settings, setSettings] = useState({
     notifications: true,
     emailAlerts: true,
-    language: 'en',
-    twoFactor: false,
   });
 
   const handleToggle = (key: keyof typeof settings) => {
@@ -109,39 +106,11 @@ export default function AppSettings() {
             <h2 className="font-semibold text-foreground">Language</h2>
           </div>
           
-          <Select value={settings.language} onValueChange={(value) => setSettings(prev => ({ ...prev, language: value }))}>
-            <SelectTrigger>
-              <SelectValue placeholder="Select language" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="en">English</SelectItem>
-              <SelectItem value="es">Español</SelectItem>
-              <SelectItem value="fr">Français</SelectItem>
-              <SelectItem value="de">Deutsch</SelectItem>
-              <SelectItem value="hi">हिंदी</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-
-        {/* Security */}
-        <div className="card-elevated p-4 space-y-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
-              <Shield className="w-5 h-5 text-primary" />
-            </div>
-            <h2 className="font-semibold text-foreground">Security</h2>
-          </div>
-          
           <div className="flex items-center justify-between">
-            <Label htmlFor="two-factor" className="flex-1">
-              <span className="font-medium">Two-Factor Authentication</span>
-              <p className="text-xs text-muted-foreground">Add extra security to your account</p>
-            </Label>
-            <Switch
-              id="two-factor"
-              checked={settings.twoFactor}
-              onCheckedChange={() => handleToggle('twoFactor')}
-            />
+            <div className="flex-1">
+              <span className="font-medium text-foreground">English</span>
+              <p className="text-xs text-muted-foreground">App language</p>
+            </div>
           </div>
         </div>
       </div>

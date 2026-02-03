@@ -1,10 +1,9 @@
 import { useState } from "react";
-import { ArrowLeft, Shield, Key, Smartphone, Eye, EyeOff } from "lucide-react";
+import { ArrowLeft, Shield, Key, Eye, EyeOff } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 
@@ -16,7 +15,6 @@ export default function Security() {
     newPassword: "",
     confirmPassword: "",
   });
-  const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
 
   const handlePasswordChange = async () => {
     if (passwordForm.newPassword !== passwordForm.confirmPassword) {
@@ -44,11 +42,6 @@ export default function Security() {
     } finally {
       setIsChangingPassword(false);
     }
-  };
-
-  const handleTwoFactorToggle = () => {
-    setTwoFactorEnabled(!twoFactorEnabled);
-    toast.info("Two-factor authentication coming soon");
   };
 
   return (
@@ -119,24 +112,6 @@ export default function Security() {
           </div>
         </div>
 
-        {/* Two-Factor Authentication */}
-        <div className="card-elevated p-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="icon-container-sm bg-success-light">
-                <Smartphone className="w-4 h-4 text-success" />
-              </div>
-              <div>
-                <h2 className="font-semibold text-foreground">Two-Factor Authentication</h2>
-                <p className="text-sm text-muted-foreground">Add an extra layer of security</p>
-              </div>
-            </div>
-            <Switch
-              checked={twoFactorEnabled}
-              onCheckedChange={handleTwoFactorToggle}
-            />
-          </div>
-        </div>
 
         {/* Security Tips */}
         <div className="card-elevated p-4">
@@ -148,7 +123,6 @@ export default function Security() {
           </div>
           <ul className="space-y-2 text-sm text-muted-foreground">
             <li>• Use a strong, unique password</li>
-            <li>• Enable two-factor authentication</li>
             <li>• Don't share your login credentials</li>
             <li>• Log out from shared devices</li>
           </ul>

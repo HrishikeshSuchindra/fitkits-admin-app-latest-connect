@@ -124,9 +124,14 @@ export default function Bookings() {
     };
   }, [queryClient]);
 
-  const handleCall = (id: string) => {
-    console.log("Calling booking:", id);
-    toast.info("Call feature coming soon");
+  const handleCall = (booking: Booking) => {
+    const phone = booking.user_profile?.phone_number;
+    if (phone) {
+      const sanitizedPhone = phone.replace(/[\s\-\(\)]/g, '');
+      window.location.href = `tel:${sanitizedPhone}`;
+    } else {
+      toast.info("Phone number not available for this booking");
+    }
   };
 
   const handleCancel = (id: string) => {
@@ -277,7 +282,7 @@ export default function Bookings() {
                         variant="default"
                         size="sm"
                         className="flex-1 gap-1.5 rounded-xl"
-                        onClick={() => handleCall(booking.id)}
+                        onClick={() => handleCall(booking)}
                       >
                         <Phone className="w-4 h-4" />
                         Call
