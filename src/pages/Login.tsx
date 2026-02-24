@@ -6,6 +6,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Loader2, AlertCircle } from 'lucide-react';
+import { useTheme } from '@/contexts/ThemeContext';
+import logoLight from '@/assets/logo-light.png';
+import logoDark from '@/assets/logo-dark.png';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -13,6 +16,7 @@ export default function Login() {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const { signIn } = useAuth();
+  const { theme } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -42,8 +46,12 @@ export default function Login() {
     <div className="mobile-container flex items-center justify-center p-4">
       <Card className="w-full card-elevated">
         <CardHeader className="text-center space-y-3 pb-2">
-          <div className="mx-auto w-14 h-14 rounded-2xl bg-primary flex items-center justify-center">
-            <span className="text-primary-foreground font-bold text-xl">FK</span>
+          <div className="mx-auto w-14 h-14 rounded-2xl flex items-center justify-center">
+            <img 
+              src={theme === 'dark' ? logoDark : logoLight} 
+              alt="FitKits" 
+              className="w-14 h-14 rounded-2xl object-contain"
+            />
           </div>
           <CardTitle className="text-xl">FitKits Admin</CardTitle>
           <CardDescription>Sign in to access the dashboard</CardDescription>

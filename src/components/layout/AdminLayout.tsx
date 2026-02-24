@@ -22,6 +22,9 @@ import {
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { useTheme } from '@/contexts/ThemeContext';
+import logoLight from '@/assets/logo-light.png';
+import logoDark from '@/assets/logo-dark.png';
 import { useState } from 'react';
 import { NotificationDropdown } from '@/components/ui/NotificationDropdown';
 
@@ -73,6 +76,7 @@ export function AdminLayout({ children, title }: AdminLayoutProps) {
   const { signOut, user } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const isMasterAdmin = user?.email === MASTER_ADMIN_EMAIL;
+  const { theme } = useTheme();
 
   const handleSignOut = async () => {
     await signOut();
@@ -116,9 +120,11 @@ export function AdminLayout({ children, title }: AdminLayoutProps) {
           <div className="sticky top-0 bg-card border-b border-border p-4 z-10">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-primary flex items-center justify-center">
-                  <span className="text-primary-foreground font-bold text-sm">FK</span>
-                </div>
+                <img 
+                  src={theme === 'dark' ? logoDark : logoLight} 
+                  alt="FitKits" 
+                  className="w-9 h-9 rounded-xl object-contain"
+                />
                 <span className="font-semibold text-foreground">FitKits</span>
               </div>
               <Button
