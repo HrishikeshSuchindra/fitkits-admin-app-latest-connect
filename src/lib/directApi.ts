@@ -158,6 +158,33 @@ export interface AuditLogsResponse {
   limit: number;
 }
 
+// ============= Event Log Types =============
+export interface EventLog {
+  id: string;
+  event_type: string;
+  actor_id: string;
+  target_id: string;
+  target_type: string;
+  metadata: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface EventLogsResponse {
+  logs: EventLog[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+export interface EventLogParams {
+  eventType?: string;
+  targetType?: string;
+  startDate?: string;
+  endDate?: string;
+  page?: number;
+  limit?: number;
+}
+
 // ============= Direct API Functions =============
 
 export const directApi = {
@@ -686,5 +713,65 @@ export const directApi = {
       // Silently fail if audit log table doesn't exist
       console.warn('Audit log insert failed - table may not exist');
     }
+  },
+
+  // ============= EVENT LOGS =============
+  getEventLogs: async (params: EventLogParams = {}): Promise<EventLogsResponse> => {
+    const { eventType, targetType, startDate, endDate, page = 1, limit = 20 } = params;
+    const offset = (page - 1) * limit;
+
+    let query = supabase
+      .from('event_logs')
+      .select('*', { count: 'exact' });
+
+    if (eventType) {
+      query = query.eq('event_type', eventType);
+    }
+    if (targetType) {
+      query = query.eq('target_type', targetType);
+    }
+    if (startDate) {
+      query = query.gte('created_at', startDate);
+    }
+    if (endDate) {
+      query = query.lte('created_at', endDate);
+    }
+
+    const { data, count, error } = await query
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1);
+
+    if (error) {
+      if (error.code === '42P01') {
+        return { logs: [], total: 0, page, limit };
+      }
+      throw new Error(error.message);
+    }
+
+    const logs: EventLog[] = (data || []).map(l => ({
+      id: l.id,
+      event_type: l.event_type,
+      actor_id: l.actor_id,
+      target_id: l.target_id,
+      target_type: l.target_type,
+      metadata: l.metadata || {},
+      created_at: l.created_at,
+    }));
+
+    return { logs, total: count || 0, page, limit };
+  },
+
+  getActorProfiles: async (actorIds: string[]): Promise<Map<string, string>> => {
+    const uniqueIds = [...new Set(actorIds.filter(Boolean))];
+    if (uniqueIds.length === 0) return new Map();
+
+    const { data } = await supabase
+      .from('profiles')
+      .select('id, full_name')
+      .in('id', uniqueIds);
+
+    const map = new Map<string, string>();
+    data?.forEach(p => map.set(p.id, p.full_name || 'Unknown'));
+    return map;
   },
 };
