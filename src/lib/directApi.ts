@@ -765,13 +765,23 @@ export const directApi = {
     const uniqueIds = [...new Set(actorIds.filter(Boolean))];
     if (uniqueIds.length === 0) return new Map();
 
-    const { data } = await supabase
-      .from('profiles')
-      .select('id, display_name, username')
-      .in('id', uniqueIds);
+    const [byIdResult, byUserIdResult] = await Promise.all([
+      supabase
+        .from('profiles')
+        .select('id, user_id, display_name, username')
+        .in('id', uniqueIds),
+      supabase
+        .from('profiles')
+        .select('id, user_id, display_name, username')
+        .in('user_id', uniqueIds),
+    ]);
 
     const map = new Map<string, string>();
-    data?.forEach(p => map.set(p.id, p.display_name || p.username || 'Unknown'));
+    [...(byIdResult.data || []), ...(byUserIdResult.data || [])].forEach(p => {
+      const name = p.display_name || p.username || 'Unknown';
+      if (p.id) map.set(p.id, name);
+      if (p.user_id) map.set(p.user_id, name);
+    });
     return map;
   },
 };

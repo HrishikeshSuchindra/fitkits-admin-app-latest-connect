@@ -249,6 +249,20 @@ export default function EventLogs() {
 function EventLogCard({ log, actorName }: { log: EventLog; actorName?: string }) {
   const Icon = getTargetIcon(log.target_type);
   const metadataEntries = Object.entries(log.metadata).filter(([_, v]) => v != null);
+  const metadata = log.metadata as Record<string, unknown>;
+
+  const actorFromMetadata = [
+    metadata.user_name,
+    metadata.booking_user_name,
+    metadata.user_display_name,
+    metadata.display_name,
+    metadata.username,
+  ].find(v => typeof v === 'string' && v.trim().length > 0) as string | undefined;
+
+  const bookingId =
+    (metadata.booking_id as string | undefined) ||
+    (metadata.bookingId as string | undefined) ||
+    (log.target_type === 'booking' ? log.target_id : undefined);
 
   return (
     <Card className="card-elevated">
@@ -267,11 +281,11 @@ function EventLogCard({ log, actorName }: { log: EventLog; actorName?: string })
               </Badge>
             </div>
             <p className="text-sm text-foreground">
-              by <span className="font-medium">{actorName || String(log.metadata?.user_name || 'System')}</span>
+              by <span className="font-medium">{actorName || actorFromMetadata || 'System'}</span>
             </p>
-            {log.metadata?.booking_id && (
+            {bookingId && (
               <p className="text-xs text-muted-foreground">
-                Booking: <span className="font-mono">{String(log.metadata.booking_id).slice(0, 8)}…</span>
+                Booking ID: <span className="font-mono break-all">{String(bookingId)}</span>
               </p>
             )}
             <p className="text-xs text-muted-foreground mt-1">
