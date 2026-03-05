@@ -267,8 +267,13 @@ function EventLogCard({ log, actorName }: { log: EventLog; actorName?: string })
               </Badge>
             </div>
             <p className="text-sm text-foreground">
-              by <span className="font-medium">{actorName || 'System'}</span>
+              by <span className="font-medium">{actorName || String(log.metadata?.user_name || 'System')}</span>
             </p>
+            {log.metadata?.booking_id && (
+              <p className="text-xs text-muted-foreground">
+                Booking: <span className="font-mono">{String(log.metadata.booking_id).slice(0, 8)}…</span>
+              </p>
+            )}
             <p className="text-xs text-muted-foreground mt-1">
               {formatLogDate(log.created_at)}
             </p>
