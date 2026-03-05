@@ -16,6 +16,7 @@ import SlotBlocksPage from "./pages/admin/SlotBlocks";
 import EventsPage from "./pages/admin/Events";
 import AuditLogPage from "./pages/admin/AuditLog";
 import ManageOwners from "./pages/admin/ManageOwners";
+import EventLogs from "./pages/admin/EventLogs";
 import NotFound from "./pages/NotFound";
 
 // Settings pages
@@ -60,7 +61,10 @@ function AppRoutes() {
         
         {/* Master Admin Only */}
         {isMasterAdmin && (
-          <Route path="/manage-owners" element={<ProtectedRoute><ManageOwners /></ProtectedRoute>} />
+          <>
+            <Route path="/manage-owners" element={<ProtectedRoute><ManageOwners /></ProtectedRoute>} />
+            <Route path="/event-logs" element={<ProtectedRoute><EventLogs /></ProtectedRoute>} />
+          </>
         )}
         
         {/* Settings */}

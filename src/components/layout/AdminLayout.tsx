@@ -17,7 +17,8 @@ import {
   Shield,
   FileCheck,
   ChevronRight,
-  Users
+  Users,
+  Activity
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -175,6 +176,22 @@ export function AdminLayout({ children, title }: AdminLayoutProps) {
                     <div className="flex items-center gap-3">
                       <Users className="h-4 w-4" />
                       Manage Owners
+                    </div>
+                    <ChevronRight className="h-4 w-4 opacity-50" />
+                  </Link>
+                  <Link
+                    to="/event-logs"
+                    onClick={() => setSidebarOpen(false)}
+                    className={cn(
+                      "flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium transition-colors",
+                      location.pathname === '/event-logs'
+                        ? "bg-primary text-primary-foreground" 
+                        : "text-foreground hover:bg-muted"
+                    )}
+                  >
+                    <div className="flex items-center gap-3">
+                      <Activity className="h-4 w-4" />
+                      Event Logs
                     </div>
                     <ChevronRight className="h-4 w-4 opacity-50" />
                   </Link>
