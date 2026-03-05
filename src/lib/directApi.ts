@@ -767,11 +767,11 @@ export const directApi = {
 
     const { data } = await supabase
       .from('profiles')
-      .select('id, full_name')
+      .select('id, display_name, username')
       .in('id', uniqueIds);
 
     const map = new Map<string, string>();
-    data?.forEach(p => map.set(p.id, p.full_name || 'Unknown'));
+    data?.forEach(p => map.set(p.id, p.display_name || p.username || 'Unknown'));
     return map;
   },
 };
