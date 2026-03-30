@@ -80,6 +80,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     let mounted = true;
     console.log('[Auth] Initializing auth...');
 
+    // Clear stale session from a different Supabase project
+    const currentRef = 'lurnxfrryigwentsdeuc';
+    const storedSession = localStorage.getItem('fitkits-admin-auth');
+    if (storedSession && !storedSession.includes(currentRef)) {
+      console.log('[Auth] Clearing stale session from old Supabase project');
+      localStorage.removeItem('fitkits-admin-auth');
+    }
+
     const initializeAuth = async () => {
       try {
         // Get initial session first
